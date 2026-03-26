@@ -1,0 +1,72 @@
+# -----------------------------------------------------------------
+# CI-only Compose file  –  standalone (NOT an override)
+#
+# Identical to docker-compose.yml but WITHOUT host port bindings.
+# Jenkins typically occupies port 8080, which clashes with the API
+# container.  Since all Service Test commands use
+#   docker compose exec -T api curl http://localhost:8080/...
+# (running curl INSIDE the container), host port mapping is not
+# needed for CI.
+#
+# Usage:  docker compose -f docker-compose.ci.yml up -d
+# -----------------------------------------------------------------
+
+services:
+  api:
+    build: .
+    container_name: repopulse-dev
+    # NO host port mapping – avoids conflict with Jenkins on 8080
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONPATH=/app
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=${INFLUX_INIT_TOKEN}
+      - INFLUX_ORG=${INFLUX_ORG}
+      - INFLUX_BUCKET=${INFLUX_BUCKET}
+    depends_on:
+      - influxdb
+    networks:
+      - repopulse-net
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
+
+  influxdb:
+    image: influxdb:2.8
+    container_name: repopulse-influx
+    # NO host port mapping
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUX_INIT_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUX_INIT_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUX_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUX_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUX_INIT_TOKEN}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    networks:
+      - repopulse-net
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: repopulse-grafana
+    # NO host port mapping
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./monitoring/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - influxdb
+    networks:
+      - repopulse-net
+
+volumes:
+  influxdb-data:
+  grafana-data:
+
+networks:
+  repopulse-net:
+    driver: bridge

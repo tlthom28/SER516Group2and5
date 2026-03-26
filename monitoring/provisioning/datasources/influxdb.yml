@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB
+    uid: influxdb
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    jsonData:
+      version: Flux
+      organization: RepoPulseOrg
+      defaultBucket: repopulse_metrics
+    secureJsonData:
+      token: devtoken12345
+    isDefault: true
+    editable: true

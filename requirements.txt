@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+requests
+prometheus-client
+pydantic
+pytest
+httpx
+pytest-cov
+influxdb-client
