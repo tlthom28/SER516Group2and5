@@ -6,6 +6,37 @@ import requests
 from datetime import datetime, timezone
 
 
+def _normalize_base_url(base_url):
+    return base_url if base_url else "https://api.taiga.io/api/v1"
+
+
+def _extract_status_change(status_diff):
+    """Extract status names from Taiga values_diff payload variants."""
+    if not isinstance(status_diff, (list, tuple)):
+        return None, None
+
+    if len(status_diff) >= 4:
+        return status_diff[1], status_diff[3]
+
+    if len(status_diff) >= 2:
+        return status_diff[0], status_diff[1]
+
+    return None, None
+
+
+def _get_user_story_history(base_url, user_story_id):
+    """Fetch raw transition history events for a single user story."""
+    try:
+        response = requests.get(f"{base_url}/history/userstory/{user_story_id}")
+        if response.status_code != 200:
+            return []
+
+        payload = response.json()
+        return payload if isinstance(payload, list) else []
+    except requests.exceptions.RequestException:
+        return []
+
+
 def auth(base_url):
     """Authenticate with Taiga API by getting projects list."""
     if base_url == '':
@@ -165,6 +196,107 @@ def get_adopted_work(base_url, slug='', taiga_id=-1):
         "status": "success",
         "sprints": sprints_result,
     }
+
+
+def get_transition_history(base_url, slug='', taiga_id=-1, sprint_id=None):
+    """Fetch user-story status transitions for a Taiga project."""
+    base_url = _normalize_base_url(base_url)
+
+    try:
+        project_id = taiga_id
+        project_slug = slug
+
+        if slug != '' and taiga_id == -1:
+            project_res = requests.get(f"{base_url}/projects/by_slug?slug={slug}")
+            if project_res.status_code != 200:
+                return {
+                    "status": "error",
+                    "message": f"Error: Taiga response code (Project) {project_res.status_code}",
+                }
+
+            project_data = project_res.json()
+            project_id = int(project_data.get("id", -1))
+            project_slug = project_data.get("slug", slug)
+        else:
+            project_res = requests.get(f"{base_url}/projects/{taiga_id}")
+            if project_res.status_code != 200:
+                return {
+                    "status": "error",
+                    "message": f"Error: Taiga response code (Project) {project_res.status_code}",
+                }
+
+            project_data = project_res.json()
+            project_id = int(project_data.get("id", taiga_id))
+            project_slug = project_data.get("slug", slug)
+
+        if project_id < 0:
+            return {
+                "status": "error",
+                "message": "Error: Invalid Taiga project id",
+            }
+
+        user_story_url = f"{base_url}/userstories?project={project_id}"
+        if sprint_id is not None:
+            user_story_url += f"&milestone={sprint_id}"
+
+        user_story_res = requests.get(user_story_url)
+        if user_story_res.status_code != 200:
+            return {
+                "status": "error",
+                "message": f"Error: Taiga response code (User stories) {user_story_res.status_code}",
+            }
+
+        user_stories = user_story_res.json()
+        if not isinstance(user_stories, list):
+            user_stories = []
+
+        stories = []
+        for story in user_stories:
+            user_story_id = story.get("id")
+            if user_story_id is None:
+                continue
+
+            raw_history = _get_user_story_history(base_url, user_story_id)
+            transitions = []
+            for event in sorted(raw_history, key=lambda e: e.get("created_at", "")):
+                values_diff = event.get("values_diff", {})
+                if not isinstance(values_diff, dict) or "status" not in values_diff:
+                    continue
+
+                from_status, to_status = _extract_status_change(values_diff.get("status"))
+                timestamp = event.get("created_at")
+
+                if from_status is None or to_status is None or not timestamp:
+                    continue
+
+                transitions.append(
+                    {
+                        "from_status": from_status,
+                        "to_status": to_status,
+                        "timestamp": timestamp,
+                    }
+                )
+
+            stories.append(
+                {
+                    "user_story_id": int(user_story_id),
+                    "user_story_name": story.get("subject", ""),
+                    "transitions": transitions,
+                }
+            )
+
+        return {
+            "status": "success",
+            "project_id": project_id,
+            "project_slug": project_slug,
+            "sprint_id": sprint_id,
+            "stories": stories,
+        }
+    except requests.exceptions.RequestException:
+        return {
+            "status": "error",
+            "message": "Request exception when trying to communicate with Taiga api",
+        }
 
 
 def parse_utc(date):

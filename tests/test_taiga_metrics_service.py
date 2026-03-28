@@ -5,7 +5,13 @@ Tests authentication, project structure retrieval, and adopted work calculation.
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timezone
-from src.services.taiga_metrics import auth, get_structure, get_adopted_work, parse_utc
+from src.services.taiga_metrics import (
+    auth,
+    get_structure,
+    get_adopted_work,
+    get_transition_history,
+    parse_utc,
+)
 
 
 class TestTaigaAuth:
@@ -405,6 +411,101 @@ class TestTaigaGetAdoptedWork:
             assert len(result["sprints"]) == 2
             assert result["sprints"][0]["adopted_count"] == 1
             assert result["sprints"][1]["adopted_count"] == 1
+
+
+class TestTaigaTransitionHistory:
+    """Test transition history retrieval for user stories."""
+
+    def test_get_transition_history_success(self):
+        project_data = {"id": 1, "slug": "test-project"}
+        user_story_data = [
+            {"id": 100, "subject": "Story 1"},
+            {"id": 101, "subject": "Story 2"},
+        ]
+        story_1_history = [
+            {
+                "created_at": "2024-01-10T10:00:00Z",
+                "values_diff": {"status": [1, "Backlog", 2, "In Progress"]},
+            },
+            {
+                "created_at": "2024-01-12T10:00:00Z",
+                "values_diff": {"status": ["In Progress", "Done"]},
+            },
+        ]
+        story_2_history = [
+            {
+                "created_at": "2024-01-11T09:00:00Z",
+                "values_diff": {"status": ["Backlog", "Ready"]},
+            }
+        ]
+
+        with patch('src.services.taiga_metrics.requests.get') as mock_get:
+            mock_get.side_effect = [
+                Mock(status_code=200, json=lambda: project_data),
+                Mock(status_code=200, json=lambda: user_story_data),
+                Mock(status_code=200, json=lambda: story_1_history),
+                Mock(status_code=200, json=lambda: story_2_history),
+            ]
+
+            result = get_transition_history('', 'test-project', -1, sprint_id=10)
+
+            assert result["status"] == "success"
+            assert result["project_id"] == 1
+            assert result["project_slug"] == "test-project"
+            assert result["sprint_id"] == 10
+            assert len(result["stories"]) == 2
+            assert len(result["stories"][0]["transitions"]) == 2
+            assert result["stories"][0]["transitions"][0]["from_status"] == "Backlog"
+            assert result["stories"][0]["transitions"][0]["to_status"] == "In Progress"
+
+            user_stories_call = mock_get.call_args_list[1].args[0]
+            assert "milestone=10" in user_stories_call
+
+    def test_get_transition_history_ignores_non_status_events(self):
+        project_data = {"id": 1, "slug": "test-project"}
+        user_story_data = [{"id": 100, "subject": "Story 1"}]
+        history_events = [
+            {
+                "created_at": "2024-01-10T10:00:00Z",
+                "values_diff": {"subject": ["Old", "New"]},
+            },
+            {
+                "created_at": "2024-01-11T10:00:00Z",
+                "values_diff": {"status": ["Backlog"]},
+            },
+        ]
+
+        with patch('src.services.taiga_metrics.requests.get') as mock_get:
+            mock_get.side_effect = [
+                Mock(status_code=200, json=lambda: project_data),
+                Mock(status_code=200, json=lambda: user_story_data),
+                Mock(status_code=200, json=lambda: history_events),
+            ]
+
+            result = get_transition_history('', 'test-project', -1)
+
+            assert result["status"] == "success"
+            assert len(result["stories"]) == 1
+            assert result["stories"][0]["transitions"] == []
+
+    def test_get_transition_history_project_error(self):
+        with patch('src.services.taiga_metrics.requests.get') as mock_get:
+            mock_get.return_value = Mock(status_code=404)
+
+            result = get_transition_history('', 'missing-project', -1)
+
+            assert result["status"] == "error"
+            assert "Project" in result["message"]
+            assert "404" in result["message"]
+
+    def test_get_transition_history_request_exception(self):
+        with patch('src.services.taiga_metrics.requests.get') as mock_get:
+            mock_get.side_effect = __import__('requests').exceptions.RequestException()
+
+            result = get_transition_history('', 'test-project', -1)
+
+            assert result["status"] == "error"
+            assert "Request exception" in result["message"]
 
 
 class TestTaigaParseUTC:
