@@ -6,6 +6,21 @@ import requests
 from datetime import datetime, timezone
 
 
+# US-122 / Task #127: Canonical cycle-time boundaries used by calculations.
+# Keep these definitions centralized to ensure all cycle-time computations
+# use the same start/end states.
+CYCLE_TIME_START_STATES = ("In Progress",)
+CYCLE_TIME_END_STATES = ("Done",)
+
+
+def get_cycle_time_state_boundaries():
+    """Return canonical cycle-time boundary states for Taiga user stories."""
+    return {
+        "start_states": CYCLE_TIME_START_STATES,
+        "end_states": CYCLE_TIME_END_STATES,
+    }
+
+
 def _normalize_base_url(base_url):
     return base_url if base_url else "https://api.taiga.io/api/v1"
 
