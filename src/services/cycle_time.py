@@ -55,3 +55,21 @@ def validate_cycle_time_input(story):
         if "status" not in t or "timestamp" not in t:
             return False
     return True
+
+def summarize_cycle_times(results):
+    times = [r["cycle_time_hours"] for r in results if r["cycle_time_hours"] is not None]
+    if not times:
+        return {"average": None, "median": None, "min": None, "max": None}
+    times.sort()
+    n = len(times)
+    avg = sum(times) / n
+    if n % 2 == 1:
+        median = times[n // 2]
+    else:
+        median = (times[n // 2 - 1] + times[n // 2]) / 2.0
+    return {
+        "average": avg,
+        "median": median,
+        "min": times[0],
+        "max": times[-1]
+    }
