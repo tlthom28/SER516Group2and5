@@ -771,12 +771,14 @@ def write_method_coverage_metrics(
 def write_taiga_metrics(
     project_slug: str,
     sprints_data: list[dict],
+    cycle_time_data: Optional[list[dict]] = None,
 ) -> WriteResult:
     """Write Taiga sprint metrics to InfluxDB.
     
     Args:
         project_slug: Taiga project slug
         sprints_data: List of sprint metric dicts with sprint_id, sprint_name, adopted_work_count, etc.
+        cycle_time_data: Optional per-story cycle time metrics.
     
     Returns:
         WriteResult with success/failure info
@@ -798,6 +800,34 @@ def write_taiga_metrics(
             points.append(p)
         except Exception as e:
             logger.warning(f"Failed to build taiga metrics point: {e}")
+
+    for story in cycle_time_data or []:
+        cycle_time_hours = story.get("cycle_time_hours")
+        if cycle_time_hours is None:
+            continue
+
+        try:
+            p = (
+                Point("taiga_cycle_time")
+                .tag("project_slug", project_slug)
+                .tag("user_story_id", str(story.get("user_story_id", "")))
+                .field("cycle_time_hours", float(cycle_time_hours))
+                .field("cycle_time_days", float(cycle_time_hours) / 24.0)
+            )
+
+            story_name = story.get("user_story_name")
+            if story_name:
+                p = p.tag("user_story_name", str(story_name))
+
+            end_timestamp = _parse_timestamp(story.get("end_timestamp"))
+            if end_timestamp:
+                p = p.time(end_timestamp, WritePrecision.NS)
+            else:
+                p = p.time(datetime.now(timezone.utc), WritePrecision.NS)
+
+            points.append(p)
+        except Exception as e:
+            logger.warning(f"Failed to build taiga cycle time point: {e}")
     
     if not points:
         return WriteResult(success=False, errors=["No valid points to write"])
