@@ -48,6 +48,7 @@ from src.api.models import (
     ClassCoverageMetricResponse,
     MethodCoverageMetricResponse,
     TaigaMetricsResponse,
+    CycleTimeResponse,
 )
 from src.metrics.loc import count_loc_in_directory
 from src.metrics.churn import compute_daily_churn
@@ -999,6 +1000,9 @@ from src.services.taiga_metrics import (
     get_transition_history as get_taiga_transition_history_data,
     parse_utc as parse_taiga_utc,
 )
+from src.services.taiga_metrics import get_adopted_work as get_taiga_adopted_work_data
+from src.services.taiga_metrics import get_transition_history as get_taiga_transition_history_data
+from src.services.cycle_time import compute_cycle_times, summarize_cycle_times
 import shutil
 
 
@@ -1336,5 +1340,90 @@ async def compute_taiga_metrics(request: Request):
             status_code=500,
             content={"detail": str(e)}
         )
+
+
+@router.get("/cycle-time", response_model=CycleTimeResponse, status_code=200)
+async def get_cycle_time_metrics(
+    start: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end: str = Query(..., description="End date in YYYY-MM-DD format"),
+    slug: str = Query("", description="Taiga project slug"),
+    taiga_id: int = Query(-1, description="Taiga project ID (alternative to slug)"),
+    base_url: str = Query("", description="Taiga API base URL"),
+    sprint_id: Optional[int] = Query(None, description="Optional Taiga sprint/milestone ID"),
+):
+    """Compute cycle-time metrics for Taiga user stories in a date range."""
+    try:
+        try:
+            start_date = datetime.strptime(start, "%Y-%m-%d").date()
+            end_date = datetime.strptime(end, "%Y-%m-%d").date()
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Invalid date format. Use YYYY-MM-DD for 'start' and 'end'."},
+            )
+
+        if start_date > end_date:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "'start' must be less than or equal to 'end'."},
+            )
+
+        if not slug and taiga_id < 0:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Missing 'slug' or 'taiga_id' parameter"},
+            )
+
+        transition_history = get_taiga_transition_history_data(base_url, slug, taiga_id, sprint_id)
+
+        if isinstance(transition_history, dict) and transition_history.get("status") == "error":
+            return JSONResponse(status_code=400, content=transition_history)
+
+        stories_for_cycle_time = []
+        for story in transition_history.get("stories", []):
+            filtered_transitions = []
+
+            for transition in story.get("transitions", []):
+                to_status = transition.get("to_status")
+                timestamp = transition.get("timestamp")
+                if not to_status or not timestamp:
+                    continue
+
+                try:
+                    transition_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+
+                if start_date <= transition_dt.date() <= end_date:
+                    filtered_transitions.append(
+                        {
+                            "status": to_status,
+                            "timestamp": transition_dt.isoformat(),
+                        }
+                    )
+
+            stories_for_cycle_time.append(
+                {
+                    "story_id": story.get("user_story_id"),
+                    "transitions": filtered_transitions,
+                }
+            )
+
+        cycle_time_results = compute_cycle_times(stories_for_cycle_time)
+        summary = summarize_cycle_times(cycle_time_results)
+
+        return CycleTimeResponse(
+            project_id=transition_history.get("project_id", taiga_id),
+            project_slug=transition_history.get("project_slug", slug),
+            sprint_id=transition_history.get("sprint_id"),
+            start_date=start,
+            end_date=end,
+            story_cycle_times=cycle_time_results,
+            summary=summary,
+        )
+
+    except Exception as e:
+        logger.error(f"Cycle time metrics computation failed: {e}")
+        return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
