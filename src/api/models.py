@@ -572,4 +572,23 @@ class TaigaMetricsResponse(BaseModel):
     project_slug: str
     analyzed_at: str
     sprints: list[TaigaSprint] = []
+
+class CycleTimeStoryMetric(BaseModel):
+    story_id: Optional[int] = None
+    cycle_time_hours: Optional[float] = None
+
+class CycleTimeSummary(BaseModel):
+    average: Optional[float] = None
+    median: Optional[float] = None
+    min: Optional[float] = None
+    max: Optional[float] = None
+
+class CycleTimeResponse(BaseModel):
+    project_id: int
+    project_slug: str
+    sprint_id: Optional[int] = None
+    start_date: str
+    end_date: str
+    story_cycle_times: list[CycleTimeStoryMetric]
+    summary: CycleTimeSummary
     summary: dict = {}
