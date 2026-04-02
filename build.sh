@@ -154,6 +154,12 @@ info "Step 5/5 — Starting RepoPulse containers …"
 docker compose up -d
 success "Containers started in detached mode."
 
+# ── Step 5.5: Run all endpoints to fill Grafana dashboard ────────────────────
+
+# Wait for healthy return from API and fill dashboards
+info "API health check..."
+docker compose run --rm api python src/fill_dashboards.py
+
 # ── Done ─────────────────────────────────────────────────────────────────────
 echo ""
 success "============================================="
