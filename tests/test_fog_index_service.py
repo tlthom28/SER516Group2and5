@@ -17,24 +17,35 @@ class TestFogIndexService:
         score = fog_index(text)
         assert score == pytest.approx(-2.62, abs=0.01)
 
-    def test_analyze_root_with_valid_directory(self):
-        """Test analyze_root with valid directory containing markdown and python files"""
+    def test_analyze_root_ignores_markdown_and_reads_python_comments(self):
+        """Test analyze_root ignores documentation and only returns code comment results."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            
-            # Create test markdown file with comments
-            md_file = tmppath / "test.md"
-            md_file.write_text("""
-# Title
-This is a simple test document. It contains some text for testing.
-The quick brown fox jumps over the lazy dog.
-""")
-            
-            result = analyze_root(tmppath, high_threshold=12.0, low_threshold=6.0, min_comment_words=5, min_words=10)
-            
+            readme_file = tmppath / "README.md"
+            readme_file.write_text("This documentation should be ignored by the fog index scanner.")
+
+            py_file = tmppath / "test.py"
+            py_file.write_text(
+                '"""\n'
+                "This module docstring explains the purpose of the file.\n"
+                "It contains enough words to be analyzed correctly.\n"
+                '"""\n'
+            )
+
+            result = analyze_root(
+                tmppath,
+                high_threshold=12.0,
+                low_threshold=6.0,
+                min_comment_words=5,
+                min_words=10,
+            )
+
             assert isinstance(result, list)
+            assert len(result) == 1
             assert all(isinstance(item, tuple) and len(item) == 5 for item in result)
-            assert all(isinstance(item[0], (int, float)) for item in result)  # score
+            assert isinstance(result[0][0], (int, float))
+            assert result[0][2] == "comment"
+            assert Path(result[0][3]).name == "test.py"
 
     def test_analyze_root_with_python_comments(self):
         """Test fog index analysis with Python files containing docstrings"""
@@ -43,26 +54,34 @@ The quick brown fox jumps over the lazy dog.
             
             # Create test Python file
             py_file = tmppath / "test.py"
-            py_file.write_text('''
-"""
-This is a module docstring.
-It contains multiple lines of documentation.
-This helps understand what the module does.
-"""
+            py_file.write_text(
+                '''
+                """
+                This is a module docstring.
+                It contains multiple lines of documentation.
+                This helps understand what the module does.
+                """
 
-def example_function():
-    """
-    Example function with docstring.
-    It demonstrates how docstrings work.
-    """
-    pass
-''')
-            
-            result = analyze_root(tmppath, high_threshold=12.0, low_threshold=6.0, min_comment_words=5, min_words=10)
-            
+                def example_function():
+                    """
+                    Example function with docstring.
+                    It demonstrates how docstrings work.
+                    """
+                    pass
+                '''
+            )
+
+            result = analyze_root(
+                tmppath,
+                high_threshold=12.0,
+                low_threshold=6.0,
+                min_comment_words=5,
+                min_words=10,
+            )
+
             assert isinstance(result, list)
-            # Should find the docstrings
-            assert len(result) >= 0
+            assert len(result) == 1
+            assert result[0][2] == "comment"
 
     def test_analyze_root_with_empty_directory(self):
         """Test analyze_root with empty directory"""
@@ -77,54 +96,71 @@ def example_function():
         """Test that comments below min_words threshold are filtered"""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            
-            # Create file with short comment
-            md_file = tmppath / "short.md"
-            md_file.write_text("Hi there.")  # Only 2 words
-            
-            result = analyze_root(tmppath, high_threshold=12.0, low_threshold=6.0, min_comment_words=5, min_words=10)
-            
+            py_file = tmppath / "short.py"
+            py_file.write_text("# Hi there.\n")
+
+            result = analyze_root(
+                tmppath,
+                high_threshold=12.0,
+                low_threshold=6.0,
+                min_comment_words=5,
+                min_words=10,
+            )
+
             assert isinstance(result, list)
+            assert len(result) == 1
+            assert result[0][1] == "ADD_MORE_TEXT"
+            assert "comment words" in result[0][4]
 
     def test_analyze_root_thresholds(self):
         """Test that fog index correctly identifies high/low scores"""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            
-            # Create file with complex text (high fog index)
-            complex_file = tmppath / "complex.txt"
-            complex_file.write_text("""
-            The dichotomous, multidisciplinary, and multifunctional characteristics 
-            of contemporary epistemological frameworks necessitate comprehensive 
-            reexamination of our fundamental presuppositions regarding the nature 
-            of reality and the acquisition of knowledge through phenomenological 
-            and existential methodologies. The heterogeneous manifestations of 
-            socioeconomic stratification engender substantial cognitive dissonance 
-            within the postmodern paradigm. Furthermore, the juxtaposition of 
-            antithetical philosophical perspectives yields unprecedented opportunities 
-            for intellectual enlightenment and the amelioration of our collective 
-            consciousness regarding the complexities inherent in contemporary society.
-            """)
-            
-            result = analyze_root(tmppath, high_threshold=12.0, low_threshold=6.0, min_comment_words=5, min_words=10)
-            
+            complex_file = tmppath / "complex.py"
+            complex_file.write_text(
+                '"""\n'
+                "The dichotomous multidisciplinary and multifunctional characteristics of contemporary epistemological frameworks necessitate comprehensive reexamination of our fundamental presuppositions regarding the acquisition of knowledge through phenomenological methodologies.\n"
+                '"""\n'
+            )
+
+            result = analyze_root(
+                tmppath,
+                high_threshold=12.0,
+                low_threshold=6.0,
+                min_comment_words=5,
+                min_words=10,
+            )
+
             assert isinstance(result, list)
+            assert len(result) == 1
+            assert result[0][0] > 12.0
+            assert result[0][1] == "FLAG_HIGH_FOG"
 
     def test_fog_index_result_format(self):
         """Test that fog index returns results with correct format"""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
-            
-            md_file = tmppath / "test.md"
-            md_file.write_text("This is a test document for testing purposes. It contains meaningful content.")
-            
-            result = analyze_root(tmppath, high_threshold=12.0, low_threshold=6.0, min_comment_words=5, min_words=10)
-            
+            py_file = tmppath / "test.py"
+            py_file.write_text(
+                '"""\n'
+                "This is a test docstring for testing purposes.\n"
+                "It contains meaningful content for analysis.\n"
+                '"""\n'
+            )
+
+            result = analyze_root(
+                tmppath,
+                high_threshold=12.0,
+                low_threshold=6.0,
+                min_comment_words=5,
+                min_words=10,
+            )
+
             for item in result:
                 score, status, kind, path, message = item
                 assert isinstance(score, (int, float))
                 assert status in ["OK", "FLAG_HIGH_FOG", "ADD_MORE_TEXT"]
-                assert kind in ["doc", "comment"]
+                assert kind == "comment"
                 assert isinstance(path, (str, Path))
                 assert isinstance(message, str)
 
@@ -132,9 +168,14 @@ def example_function():
         """Test that a very easy sentence is still considered low threshold."""
         with tempfile.TemporaryDirectory() as tmpdir:
             temppath = Path(tmpdir)
-            md_file = temppath / "simple.md"
-            md_file.write_text(
-                "I don't have a cat. I have a dog. This is a simple sentence. It is easy to read."
+            py_file = temppath / "simple.py"
+            py_file.write_text(
+                '"""\n'
+                "Cats run fast.\n"
+                "Dogs jump high.\n"
+                "Birds fly low.\n"
+                "Fish swim near.\n"
+                '"""\n'
             )
 
             result = analyze_root(
@@ -149,4 +190,4 @@ def example_function():
             score, status, _, _, message = result[0]
             assert score < 5.0
             assert status == "ADD_MORE_TEXT"
-            assert "Fog score is 0-5" in message
+            assert "comments/docstrings" in message
