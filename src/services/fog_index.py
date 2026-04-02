@@ -1,6 +1,6 @@
 """
-Fog Index scanner for documentation and code comments.
-Measures readability of code comments and documentation using Flesch-Kincaid readability metric.
+Fog Index scanner for code comments.
+Measures readability of code comments using Flesch-Kincaid readability metric.
 """
 import re
 import tokenize
@@ -8,7 +8,6 @@ import io
 import ast
 from pathlib import Path
 
-DOCUMENTATION_FILE = {".md", ".txt"}
 CODE_FILE = {".py", ".java"}
 BLOCK_COMMENT_CODE_FILE = {".java"}
 IGNORE_DIRECTORY = {
@@ -19,49 +18,29 @@ IGNORE_DIRECTORY = {
 LINE_PREFIXES = {".py": ["#"], ".java": ["//"]}
 WORD_RE = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
 SENTENCE_SPLIT_RE = re.compile(r"[.!?]+|\n{2,}|\n(?=\s*[-*+]\s)|\n(?=\s*\d+\.\s)")
-SUPPORTED_FILE_EXTENSIONS = DOCUMENTATION_FILE | CODE_FILE
+SUPPORTED_FILE_EXTENSIONS = CODE_FILE
 
 
 def iterate_files(root: Path):
-    """Scan for code and documentation files to compute the fog index."""
+    """Scan for code files to compute the fog index."""
     for path in root.rglob("*"):
-        if path.is_file() and not any(part in IGNORE_DIRECTORY for part in path.parts):
+        if (path.is_file() and path.suffix.lower() in SUPPORTED_FILE_EXTENSIONS and not any(part in IGNORE_DIRECTORY for part in path.parts)):
             yield path
 
 
 def extract_text(path: Path):
-    """Extract text for fog index scan from a file, returning the text and its kind (doc or comment)."""
+    """Extract text for fog index scan from a file, returning the text and its comments."""
     extracted_text = path.suffix.lower()
     try:
         raw = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return None, None
 
-    if extracted_text in DOCUMENTATION_FILE:
-        return clean_docs(raw), "doc"
     if extracted_text in CODE_FILE:
         if extracted_text == ".py":
             return extract_python_comments(raw), "comment"
         return extract_generic_comments(raw, extracted_text), "comment"
     return None, None
-
-
-def clean_docs(text: str) -> str:
-    """Clean documentation text by removing code blocks, inline code, and links."""
-    text = re.sub(r"```.*?```", " ", text, flags=re.S)
-    text = re.sub(r"`[^`]*`", " ", text)
-    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-
-    lines = []
-    for line in text.splitlines():
-        string = line.strip()
-        if not string:
-            lines.append("")
-            continue
-        if string.count("/") >= 2 and not re.search(r"[.!?]", string):
-            continue
-        lines.append(line)
-    return "\n".join(lines)
 
 
 def extract_python_comments(text: str) -> str:
@@ -112,9 +91,8 @@ def fog_index(text: str, kind: str = "doc"):
     sentences_list = sentences(text, kind)
     if not words_list or not sentences_list:
         return None
-    complex_words = sum(1 for word in words_list if syllable_count(word) >= 3 and not word.isupper())
-    return 0.4 * ((len(words_list) / len(sentences_list)) + 100 * (complex_words / len(words_list)))
-
+    syllables = sum(syllable_count(word) for word in words_list)
+    return (0.39 * (len(words_list) / len(sentences_list)) + 11.8 * (syllables / len(words_list)) - 15.59)
 
 def words(text: str):
     """Extract words from text."""
@@ -155,7 +133,7 @@ def analyze_file(path: Path, high_threshold: float, low_threshold: float, min_co
 
     words_count = len(words(text))
     if words_count == 0:
-        return (None, "NO_COMMENTS", kind, path, "No comment/text found.")
+        return (None, "NO_COMMENTS", kind, path, "No comment text found.")
 
     if kind == "comment" and words_count < min_comment_words:
         return (None, "ADD_MORE_TEXT", kind, path, f"Only {words_count} comment words.")
@@ -167,12 +145,12 @@ def analyze_file(path: Path, high_threshold: float, low_threshold: float, min_co
     if score is None:
         return (None, "ADD_MORE_TEXT", kind, path, "Not enough sentences.")
 
-    if 0 <= score <= low_threshold:
+    if score <= low_threshold:
         status = "ADD_MORE_TEXT"
-        message = "Fog score is 0-5. Please add more meaningful comments/documentation."
+        message = "Fog score is 0-5. Please add more meaningful comments/docstrings."
     elif score > high_threshold:
         status = "FLAG_HIGH_FOG"
-        message = "Hard to read. Simplify your comments/documentation."
+        message = "Hard to read. Simplify your comments/docstrings."
     else:
         status = "OK"
         message = ""
