@@ -1,6 +1,6 @@
-# RepoPulse
+# Group Project
 
-RepoPulse is a tool that analyzes GitHub repositories and computes software metrics — Lines of Code (LOC), Code Churn, and Work In Progress (WIP). It is built with FastAPI, InfluxDB, and Grafana, all running in Docker containers.
+The project is a tool that analyzes GitHub repositories and computes software metrics — Lines of Code (LOC), Code Churn, and Work In Progress (WIP). It is built with FastAPI, InfluxDB, and Grafana, all running in Docker containers.
 
 This project was built as part of SER 516 at Arizona State University.
 
@@ -95,9 +95,9 @@ All metric calculations and integrations were implemented by the development tea
 ./build.sh restart        # stop, rebuild, test, start
 ```
 
-## How RepoPulse Works
+## How The Project Works
 
-The main entry point is `POST /jobs`. When you submit a job, RepoPulse runs an integrated analysis pipeline in a background worker thread. A single job triggers all of the following steps automatically:
+The main entry point is `POST /jobs`. When you submit a job, project runs an integrated analysis pipeline in a background worker thread. A single job triggers all of the following steps automatically:
 
 1. **Clone** the repository (shallow clone for speed, or use a local path)
 2. **Compute LOC** — scans every supported file (.java, .py, .ts) and counts code lines, comment lines, blank lines, and weighted LOC
@@ -217,8 +217,8 @@ After a job completes, the metrics are in InfluxDB and the Grafana dashboard pic
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `INFLUX_INIT_TOKEN` | `devtoken12345` | InfluxDB admin token |
-| `INFLUX_ORG` | `RepoPulseOrg` | InfluxDB organization |
-| `INFLUX_BUCKET` | `repopulse_metrics` | InfluxDB bucket |
+| `INFLUX_ORG` | `projectOrg` | InfluxDB organization |
+| `INFLUX_BUCKET` | `project_metrics` | InfluxDB bucket |
 | `INFLUX_RETENTION_DAYS` | `90` | Metric retention in days |
 | `WORKER_POOL_SIZE` | `4` | Concurrent analysis workers |
 | `GF_ADMIN_USER` | `admin` | Grafana admin username |
@@ -228,15 +228,15 @@ After a job completes, the metrics are in InfluxDB and the Grafana dashboard pic
 
 | Container | Image | URL | Purpose |
 |-----------|-------|-----|---------|
-| `repopulse-dev` | local build | http://localhost:8080 | FastAPI backend (19 endpoints) |
-| `repopulse-influx` | `influxdb:2.8` | http://localhost:8086 | Time-series database |
-| `repopulse-grafana` | `grafana/grafana:11.5.1` | http://localhost:3000 | Dashboard visualization (3 dashboards) |
+| `project-dev` | local build | http://localhost:8080 | FastAPI backend (19 endpoints) |
+| `project-influx` | `influxdb:2.8` | http://localhost:8086 | Time-series database |
+| `project-grafana` | `grafana/grafana:11.5.1` | http://localhost:3000 | Dashboard visualization (3 dashboards) |
 
 ### Grafana Dashboards
 
 Three auto-provisioned dashboards provide comprehensive insights:
 
-1. **RepoPulse Overview** — LOC, churn, and code trends
+1. **project Overview** — LOC, churn, and code trends
 2. **Code Quality Metrics** — Fog Index, class/method coverage (with repo & branch filters)
 3. **Taiga Sprint Metrics** — Adopted work and sprint velocity (with project filter)
 
@@ -245,7 +245,7 @@ All dashboards update automatically when new metrics are written to InfluxDB.
 ## Project Structure
 
 ```
-RepoPulse/
+project/
   src/
     main.py              # FastAPI entrypoint + worker pool lifecycle
     api/
@@ -316,7 +316,7 @@ Or just use the build script — it runs tests inside Docker automatically.
 
 ## Performance Testing
 
-RepoPulse includes automated performance benchmarks (see `tests/test_performance.py`):
+project includes automated performance benchmarks (see `tests/test_performance.py`):
 
 - **LOC benchmark**: generates a synthetic repository with 10,000 source files and measures execution time, peak memory, and throughput of `count_loc_in_directory`.
 - **Churn benchmark**: creates a git repository with 1,000 commits and measures execution time, peak memory, and throughput of `compute_repo_churn` and `compute_daily_churn`.
@@ -325,4 +325,4 @@ Baseline results and threshold details are documented in [docs/PERFORMANCE_BASEL
 
 ## Test Coverage
 
-RepoPulse includes a comprehensive test suite with 405+ tests covering all services and endpoints.
+project includes a comprehensive test suite with 405+ tests covering all services and endpoints.
