@@ -348,7 +348,7 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "from(bucket:\"repopulse_metrics\") |> range(start: -7d) |> filter(fn: (r) => r._measurement == \"method_coverage\") |> filter(fn: (r) => r._field == \"coverage_percent\") |> group(columns: [\"repo_name\"]) |> last()",
+          "query": "from(bucket:\"repopulse_metrics\") |> range(start: -30d) |> filter(fn: (r) => r._measurement == \"method_coverage\") |> filter(fn: (r) => r._field == \"coverage_percent\") |> group(columns: [\"repo_name\"])",
           "refId": "A"
         }
       ],
