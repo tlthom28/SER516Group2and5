@@ -112,9 +112,8 @@ def fog_index(text: str, kind: str = "doc"):
     sentences_list = sentences(text, kind)
     if not words_list or not sentences_list:
         return None
-    complex_words = sum(1 for word in words_list if syllable_count(word) >= 3 and not word.isupper())
-    return 0.4 * ((len(words_list) / len(sentences_list)) + 100 * (complex_words / len(words_list)))
-
+    syllables = sum(syllable_count(word) for word in words_list)
+    return (0.39 * (len(words_list) / len(sentences_list)) + 11.8 * (syllables / len(words_list)) - 15.59)
 
 def words(text: str):
     """Extract words from text."""
@@ -167,7 +166,7 @@ def analyze_file(path: Path, high_threshold: float, low_threshold: float, min_co
     if score is None:
         return (None, "ADD_MORE_TEXT", kind, path, "Not enough sentences.")
 
-    if 0 <= score <= low_threshold:
+    if score <= low_threshold:
         status = "ADD_MORE_TEXT"
         message = "Fog score is 0-5. Please add more meaningful comments/documentation."
     elif score > high_threshold:

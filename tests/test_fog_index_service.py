@@ -5,11 +5,17 @@ Tests Flesch-Kincaid readability analysis functionality
 import pytest
 import tempfile
 from pathlib import Path
-from src.services.fog_index import analyze_root
+from src.services.fog_index import analyze_root, fog_index
 
 
 class TestFogIndexService:
     """Test fog index readability analysis"""
+
+    def test_fog_index_formula(self):
+        """Test that the fog index score uses Flesch-Kincaid grade level."""
+        text = "I don't have a cat. I have a dog."
+        score = fog_index(text)
+        assert score == pytest.approx(-2.62, abs=0.01)
 
     def test_analyze_root_with_valid_directory(self):
         """Test analyze_root with valid directory containing markdown and python files"""
@@ -121,3 +127,26 @@ def example_function():
                 assert kind in ["doc", "comment"]
                 assert isinstance(path, (str, Path))
                 assert isinstance(message, str)
+
+    def test_if_fog_index_is_low(self):
+        """Test that a very easy sentence is still considered low threshold."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temppath = Path(tmpdir)
+            md_file = temppath / "simple.md"
+            md_file.write_text(
+                "I don't have a cat. I have a dog. This is a simple sentence. It is easy to read."
+            )
+
+            result = analyze_root(
+                temppath,
+                high_threshold=12.0,
+                low_threshold=5.0,
+                min_comment_words=5,
+                min_words=10,
+            )
+
+            assert len(result) == 1
+            score, status, _, _, message = result[0]
+            assert score < 5.0
+            assert status == "ADD_MORE_TEXT"
+            assert "Fog score is 0-5" in message
