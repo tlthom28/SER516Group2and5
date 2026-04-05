@@ -101,17 +101,17 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket:\"repopulse_metrics\") |> range(start: -7d) |> filter(fn: (r) => r._measurement == \"fog_index_score\") |> filter(fn: (r) => r._field == \"score\") |> group(columns: [\"repo_name\"]) |> mean()",
+          "query": "from(bucket:\"repopulse_metrics\") |> range(start: -30d) |> filter(fn: (r) => r._measurement == \"fog_index_score\") |> filter(fn: (r) => r._field == \"score\") |> group(columns: [\"repo_name\"])",
           "refId": "A"
         },
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket:\"repopulse_metrics\") |> range(start: -7d) |> filter(fn: (r) => r._measurement == \"class_coverage\") |> filter(fn: (r) => r._field == \"coverage_percent\") |> group(columns: [\"repo_name\"]) |> last()",
+          "query": "from(bucket:\"repopulse_metrics\") |> range(start: -30d) |> filter(fn: (r) => r._measurement == \"class_coverage\") |> filter(fn: (r) => r._field == \"coverage_percent\") |> group(columns: [\"repo_name\"])",
           "refId": "B"
         },
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket:\"repopulse_metrics\") |> range(start: -7d) |> filter(fn: (r) => r._measurement == \"method_coverage\") |> filter(fn: (r) => r._field == \"coverage_percent\") |> group(columns: [\"repo_name\"]) |> last()",
+          "query": "from(bucket:\"repopulse_metrics\") |> range(start: -30d) |> filter(fn: (r) => r._measurement == \"method_coverage\") |> filter(fn: (r) => r._field == \"coverage_percent\") |> group(columns: [\"repo_name\"])",
           "refId": "C"
         }
       ],
@@ -353,7 +353,7 @@
         }
       ],
       "title": "Method Comment Coverage % (All Methods)",
-      "type": "timeseries"
+      "type": "gauge"
     }
   ],
   "refresh": "10s",
