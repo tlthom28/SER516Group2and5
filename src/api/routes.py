@@ -48,6 +48,7 @@ from src.api.models import (
     ClassCoverageMetricResponse,
     MethodCoverageMetricResponse,
     TaigaMetricsResponse,
+    CycleTimeResponse,
 )
 from src.metrics.loc import count_loc_in_directory
 from src.metrics.churn import compute_daily_churn
@@ -992,7 +993,16 @@ async def get_loc_change(
 from src.services.fog_index import analyze_root as analyze_fog_index_root
 from src.services.class_coverage import analyze_repo as analyze_class_coverage_repo
 from src.services.method_coverage import scan_repo as scan_method_coverage_repo
+from src.services.taiga_metrics import (
+    CYCLE_TIME_END_STATES,
+    CYCLE_TIME_START_STATES,
+    get_adopted_work as get_taiga_adopted_work_data,
+    get_transition_history as get_taiga_transition_history_data,
+    parse_utc as parse_taiga_utc,
+)
 from src.services.taiga_metrics import get_adopted_work as get_taiga_adopted_work_data
+from src.services.taiga_metrics import get_transition_history as get_taiga_transition_history_data
+from src.services.cycle_time import compute_cycle_times, summarize_cycle_times
 import shutil
 
 
@@ -1255,22 +1265,73 @@ async def compute_taiga_metrics(request: Request):
                     "created_stories": sprint.get("created_stories", 0),
                     "completed_stories": sprint.get("completed_stories", 0),
                 })
+
+        cycle_time_data = []
+        transition_data = get_taiga_transition_history_data(base_url, slug, taiga_id)
+        if isinstance(transition_data, dict) and transition_data.get("status") == "success":
+            for story in transition_data.get("stories", []):
+                start_ts = None
+                end_ts = None
+
+                for transition in story.get("transitions", []):
+                    to_status = transition.get("to_status")
+                    timestamp = transition.get("timestamp")
+                    if not timestamp:
+                        continue
+
+                    if start_ts is None and to_status in CYCLE_TIME_START_STATES:
+                        start_ts = timestamp
+                        continue
+
+                    if start_ts is not None and to_status in CYCLE_TIME_END_STATES:
+                        end_ts = timestamp
+                        break
+
+                if not start_ts or not end_ts:
+                    continue
+
+                start_dt = parse_taiga_utc(start_ts)
+                end_dt = parse_taiga_utc(end_ts)
+                if start_dt is None or end_dt is None or end_dt < start_dt:
+                    continue
+
+                cycle_time_data.append(
+                    {
+                        "user_story_id": story.get("user_story_id"),
+                        "user_story_name": story.get("user_story_name", ""),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "cycle_time_hours": (end_dt - start_dt).total_seconds() / 3600.0,
+                    }
+                )
+        elif isinstance(transition_data, dict):
+            logger.warning(f"Could not fetch transition history for cycle time persistence: {transition_data}")
         
         # Write to InfluxDB
         try:
             write_taiga_metrics(
                 project_slug=slug or f"taiga_{taiga_id}",
-                sprints_data=sprints_result
+                sprints_data=sprints_result,
+                cycle_time_data=cycle_time_data,
             )
         except Exception as influx_err:
             logger.warning(f"Failed to write taiga metrics to InfluxDB: {influx_err}")
+
+        avg_cycle_time_hours = (
+            sum(item["cycle_time_hours"] for item in cycle_time_data) / len(cycle_time_data)
+            if cycle_time_data else None
+        )
         
         return TaigaMetricsResponse(
             project_id=taiga_data.get("project_id", taiga_id),
             project_slug=taiga_data.get("project_slug", slug),
             analyzed_at=datetime.now(timezone.utc).isoformat(),
             sprints=sprints_result,
-            summary={"sprint_count": len(sprints_result)}
+            summary={
+                "sprint_count": len(sprints_result),
+                "cycle_time_story_count": len(cycle_time_data),
+                "average_cycle_time_hours": avg_cycle_time_hours,
+            }
         )
     
     except Exception as e:
@@ -1279,5 +1340,90 @@ async def compute_taiga_metrics(request: Request):
             status_code=500,
             content={"detail": str(e)}
         )
+
+
+@router.get("/cycle-time", response_model=CycleTimeResponse, status_code=200)
+async def get_cycle_time_metrics(
+    start: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end: str = Query(..., description="End date in YYYY-MM-DD format"),
+    slug: str = Query("", description="Taiga project slug"),
+    taiga_id: int = Query(-1, description="Taiga project ID (alternative to slug)"),
+    base_url: str = Query("", description="Taiga API base URL"),
+    sprint_id: Optional[int] = Query(None, description="Optional Taiga sprint/milestone ID"),
+):
+    """Compute cycle-time metrics for Taiga user stories in a date range."""
+    try:
+        try:
+            start_date = datetime.strptime(start, "%Y-%m-%d").date()
+            end_date = datetime.strptime(end, "%Y-%m-%d").date()
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Invalid date format. Use YYYY-MM-DD for 'start' and 'end'."},
+            )
+
+        if start_date > end_date:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "'start' must be less than or equal to 'end'."},
+            )
+
+        if not slug and taiga_id < 0:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Missing 'slug' or 'taiga_id' parameter"},
+            )
+
+        transition_history = get_taiga_transition_history_data(base_url, slug, taiga_id, sprint_id)
+
+        if isinstance(transition_history, dict) and transition_history.get("status") == "error":
+            return JSONResponse(status_code=400, content=transition_history)
+
+        stories_for_cycle_time = []
+        for story in transition_history.get("stories", []):
+            filtered_transitions = []
+
+            for transition in story.get("transitions", []):
+                to_status = transition.get("to_status")
+                timestamp = transition.get("timestamp")
+                if not to_status or not timestamp:
+                    continue
+
+                try:
+                    transition_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+
+                if start_date <= transition_dt.date() <= end_date:
+                    filtered_transitions.append(
+                        {
+                            "status": to_status,
+                            "timestamp": transition_dt.isoformat(),
+                        }
+                    )
+
+            stories_for_cycle_time.append(
+                {
+                    "story_id": story.get("user_story_id"),
+                    "transitions": filtered_transitions,
+                }
+            )
+
+        cycle_time_results = compute_cycle_times(stories_for_cycle_time)
+        summary = summarize_cycle_times(cycle_time_results)
+
+        return CycleTimeResponse(
+            project_id=transition_history.get("project_id", taiga_id),
+            project_slug=transition_history.get("project_slug", slug),
+            sprint_id=transition_history.get("sprint_id"),
+            start_date=start,
+            end_date=end,
+            story_cycle_times=cycle_time_results,
+            summary=summary,
+        )
+
+    except Exception as e:
+        logger.error(f"Cycle time metrics computation failed: {e}")
+        return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
