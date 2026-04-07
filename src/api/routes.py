@@ -61,6 +61,7 @@ from src.core.influx import (
     write_class_coverage_metrics,
     write_method_coverage_metrics,
     write_taiga_metrics,
+    write_wip_metrics,
     _parse_timestamp,
     query_latest_snapshot,
     query_timeseries_snapshots_by_repo,
