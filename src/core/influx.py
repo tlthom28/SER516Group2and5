@@ -834,3 +834,16 @@ def write_taiga_metrics(
     
     return _write_with_retry(points)
 
+def write_wip_metrics(wip_response: dict) -> WriteResult:
+
+    try:
+        points = map_wip_response_to_points(wip_response)
+        
+        if not points:
+            return WriteResult(success=False, errors=["No valid WIP points to write"])
+        
+        return _write_with_retry(points)
+        
+    except Exception as exc:
+        logger.exception(f"Failed to write WIP metrics: {exc}")
+        return WriteResult(success=False, errors=[str(exc)])
