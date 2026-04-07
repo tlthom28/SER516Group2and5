@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import List, Dict, Any
 import logging
 
+from src.services.taiga_metrics import CYCLE_TIME_START_STATES, CYCLE_TIME_END_STATES
+
 # Module logger for cycle time computations
 logger = logging.getLogger(__name__)
 
@@ -29,11 +31,11 @@ def compute_cycle_times(user_stories: List[Dict[str, Any]]) -> List[Dict[str, An
         end_time = None
         for idx, t in enumerate(transitions_sorted):
             # Look for the first start state then the last end state after it
-            if t.get("status") == "In Progress":
+            if t.get("status") in CYCLE_TIME_START_STATES:
                 start_time = t.get("timestamp")
                 logger.debug("Found start_time for story_id=%s: %s", story_id, start_time)
                 for t2 in transitions_sorted[idx+1:]:
-                    if t2.get("status") == "Done":
+                    if t2.get("status") in CYCLE_TIME_END_STATES:
                         end_time = t2.get("timestamp")
                         logger.debug("Found end_time for story_id=%s: %s", story_id, end_time)
                 break
