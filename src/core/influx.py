@@ -834,3 +834,71 @@ def write_taiga_metrics(
     
     return _write_with_retry(points)
 
+
+# file: map_wip_response_to_points for transforming WIP API response to InfluxDB points
+def map_wip_response_to_points(wip_response: dict) -> list:
+
+    points = []
+    
+    project_id = wip_response.get("project_id")
+    project_slug = wip_response.get("project_slug")
+    sprints = wip_response.get("sprints", [])
+    
+    if not sprints:
+        logger.warning("No sprints in WIP response")
+        return points
+    
+    for sprint in sprints:
+        sprint_id = sprint.get("sprint_id")
+        sprint_name = sprint.get("sprint_name", "")
+        daily_wip = sprint.get("daily_wip", [])
+        
+        if not daily_wip:
+            logger.debug(f"No daily WIP data for sprint {sprint_id}")
+            continue
+        
+        for day in daily_wip:
+            date_str = day.get("date")
+            wip_count = day.get("wip_count", 0)
+            backlog_count = day.get("backlog_count", 0)
+            done_count = day.get("done_count", 0)
+            
+            if not date_str:
+                continue
+            
+            try:
+                time_obj = datetime.fromisoformat(date_str)
+                p = (
+                    Point("taiga_wip")
+                    .tag("project_id", str(project_id))
+                    .tag("project_slug", str(project_slug))
+                    .tag("sprint_id", str(sprint_id))
+                    .tag("sprint_name", sprint_name)
+                    .field("wip_count", int(wip_count))
+                    .field("backlog_count", int(backlog_count))
+                    .field("done_count", int(done_count))
+                    .time(time_obj, WritePrecision.NS)
+                )
+                points.append(p)
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse WIP point for {date_str}: {e}")
+                continue
+    
+    return points
+
+
+def write_wip_metrics(wip_response: dict) -> WriteResult:
+
+    try:
+        points = map_wip_response_to_points(wip_response)
+        
+        if not points:
+            return WriteResult(success=False, errors=["No valid WIP points to write"])
+        
+        return _write_with_retry(points)
+        
+    except Exception as exc:
+        logger.exception(f"Failed to write WIP metrics: {exc}")
+        return WriteResult(success=False, errors=[str(exc)])
+
+
