@@ -993,6 +993,13 @@ async def get_loc_change(
 from src.services.fog_index import analyze_root as analyze_fog_index_root
 from src.services.class_coverage import analyze_repo as analyze_class_coverage_repo
 from src.services.method_coverage import scan_repo as scan_method_coverage_repo
+from src.services.taiga_metrics import (
+    CYCLE_TIME_END_STATES,
+    CYCLE_TIME_START_STATES,
+    get_adopted_work as get_taiga_adopted_work_data,
+    get_transition_history as get_taiga_transition_history_data,
+    parse_utc as parse_taiga_utc,
+)
 from src.services.taiga_metrics import get_adopted_work as get_taiga_adopted_work_data
 from src.services.taiga_metrics import get_transition_history as get_taiga_transition_history_data
 from src.services.cycle_time import compute_cycle_times, summarize_cycle_times
@@ -1258,22 +1265,73 @@ async def compute_taiga_metrics(request: Request):
                     "created_stories": sprint.get("created_stories", 0),
                     "completed_stories": sprint.get("completed_stories", 0),
                 })
+
+        cycle_time_data = []
+        transition_data = get_taiga_transition_history_data(base_url, slug, taiga_id)
+        if isinstance(transition_data, dict) and transition_data.get("status") == "success":
+            for story in transition_data.get("stories", []):
+                start_ts = None
+                end_ts = None
+
+                for transition in story.get("transitions", []):
+                    to_status = transition.get("to_status")
+                    timestamp = transition.get("timestamp")
+                    if not timestamp:
+                        continue
+
+                    if start_ts is None and to_status in CYCLE_TIME_START_STATES:
+                        start_ts = timestamp
+                        continue
+
+                    if start_ts is not None and to_status in CYCLE_TIME_END_STATES:
+                        end_ts = timestamp
+                        break
+
+                if not start_ts or not end_ts:
+                    continue
+
+                start_dt = parse_taiga_utc(start_ts)
+                end_dt = parse_taiga_utc(end_ts)
+                if start_dt is None or end_dt is None or end_dt < start_dt:
+                    continue
+
+                cycle_time_data.append(
+                    {
+                        "user_story_id": story.get("user_story_id"),
+                        "user_story_name": story.get("user_story_name", ""),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "cycle_time_hours": (end_dt - start_dt).total_seconds() / 3600.0,
+                    }
+                )
+        elif isinstance(transition_data, dict):
+            logger.warning(f"Could not fetch transition history for cycle time persistence: {transition_data}")
         
         # Write to InfluxDB
         try:
             write_taiga_metrics(
                 project_slug=slug or f"taiga_{taiga_id}",
-                sprints_data=sprints_result
+                sprints_data=sprints_result,
+                cycle_time_data=cycle_time_data,
             )
         except Exception as influx_err:
             logger.warning(f"Failed to write taiga metrics to InfluxDB: {influx_err}")
+
+        avg_cycle_time_hours = (
+            sum(item["cycle_time_hours"] for item in cycle_time_data) / len(cycle_time_data)
+            if cycle_time_data else None
+        )
         
         return TaigaMetricsResponse(
             project_id=taiga_data.get("project_id", taiga_id),
             project_slug=taiga_data.get("project_slug", slug),
             analyzed_at=datetime.now(timezone.utc).isoformat(),
             sprints=sprints_result,
-            summary={"sprint_count": len(sprints_result)}
+            summary={
+                "sprint_count": len(sprints_result),
+                "cycle_time_story_count": len(cycle_time_data),
+                "average_cycle_time_hours": avg_cycle_time_hours,
+            }
         )
     
     except Exception as e:

@@ -17,6 +17,7 @@ from src.core.influx import (
     batch_write_loc_metrics,
     write_churn_metric,
     write_daily_churn_metrics,
+    write_taiga_metrics,
     BATCH_SIZE,
     MAX_RETRIES,
 )
@@ -316,6 +317,65 @@ class TestChurnWrites:
         result = write_daily_churn_metrics("https://github.com/owner/repo", {})
         assert result.success is True
         assert result.points_written == 0
+
+
+class TestTaigaWrites:
+    """Taiga write functions should persist sprint and cycle-time points."""
+
+    @patch("src.core.influx.get_client")
+    def test_write_taiga_metrics_with_cycle_time(self, mock_get_client):
+        mock_write_api = MagicMock()
+        mock_client = MagicMock()
+        mock_client.write_api.return_value = mock_write_api
+        mock_get_client.return_value = mock_client
+
+        result = write_taiga_metrics(
+            project_slug="proj",
+            sprints_data=[
+                {
+                    "sprint_id": 10,
+                    "sprint_name": "Sprint 1",
+                    "adopted_work_count": 2,
+                    "created_stories": 5,
+                    "completed_stories": 4,
+                }
+            ],
+            cycle_time_data=[
+                {
+                    "user_story_id": 101,
+                    "user_story_name": "US-101",
+                    "end_timestamp": "2026-03-28T12:00:00+00:00",
+                    "cycle_time_hours": 36.0,
+                }
+            ],
+        )
+
+        assert result.success is True
+        assert result.points_written == 2
+        mock_write_api.write.assert_called_once()
+
+        points = mock_write_api.write.call_args.kwargs["record"]
+        lines = [p.to_line_protocol() for p in points]
+        assert any("taiga_adopted_work" in line for line in lines)
+        assert any("taiga_cycle_time" in line for line in lines)
+
+    @patch("src.core.influx.get_client")
+    def test_write_taiga_metrics_skips_none_cycle_time(self, mock_get_client):
+        mock_write_api = MagicMock()
+        mock_client = MagicMock()
+        mock_client.write_api.return_value = mock_write_api
+        mock_get_client.return_value = mock_client
+
+        result = write_taiga_metrics(
+            project_slug="proj",
+            sprints_data=[],
+            cycle_time_data=[{"user_story_id": 202, "cycle_time_hours": None}],
+        )
+
+        assert result.success is False
+        assert result.points_written == 0
+        assert result.points_failed == 0
+        assert "No valid points to write" in result.errors
 
 
 # =========================================================================
