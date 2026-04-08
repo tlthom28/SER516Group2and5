@@ -61,6 +61,7 @@ from src.core.influx import (
     write_class_coverage_metrics,
     write_method_coverage_metrics,
     write_taiga_metrics,
+    write_wip_metrics,
     _parse_timestamp,
     query_latest_snapshot,
     query_timeseries_snapshots_by_repo,
@@ -571,6 +572,13 @@ async def compute_wip(request: Request):
                 sprints=[sprint_resp],
             )
 
+            # Write WIP metrics to InfluxDB
+            influx_result = write_wip_metrics(response.dict())
+            if influx_result.success:
+                logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
+            else:
+                logger.warning(f"Failed to write WIP metrics to InfluxDB: {influx_result.errors}")
+
             logger.info(f"Kanban WIP metrics calculated: {len(kanban_metric.daily_wip)} days")
             return response
 
@@ -617,6 +625,13 @@ async def compute_wip(request: Request):
             sprints_count=len(sprints_response),
             sprints=sprints_response,
         )
+
+        # Write WIP metrics to InfluxDB
+        influx_result = write_wip_metrics(response.dict())
+        if influx_result.success:
+            logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
+        else:
+            logger.warning(f"Failed to write WIP metrics to InfluxDB: {influx_result.errors}")
 
         logger.info(f"Daily WIP metrics calculated for {len(sprints_response)} sprints")
         return response
