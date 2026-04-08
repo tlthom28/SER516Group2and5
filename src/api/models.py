@@ -591,4 +591,3 @@ class CycleTimeResponse(BaseModel):
     end_date: str
     story_cycle_times: list[CycleTimeStoryMetric]
     summary: CycleTimeSummary
-    summary: dict = {}

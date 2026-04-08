@@ -61,6 +61,7 @@ from src.core.influx import (
     write_class_coverage_metrics,
     write_method_coverage_metrics,
     write_taiga_metrics,
+    write_cycle_time_metrics,
     _parse_timestamp,
     query_latest_snapshot,
     query_timeseries_snapshots_by_repo,
@@ -1411,6 +1412,17 @@ async def get_cycle_time_metrics(
 
         cycle_time_results = compute_cycle_times(stories_for_cycle_time)
         summary = summarize_cycle_times(cycle_time_results)
+       
+        # writing cycle time metrics to InfluxDB
+        try:
+            write_cycle_time_metrics(
+                project_slug=slug or f"taiga_{taiga_id}",
+                story_cycle_times=cycle_time_results,
+                sprint_id=sprint_id,
+                end_date=end,
+            )
+        except Exception as influx_err:
+            logger.warning(f"Failed to write cycle time metrics to InfluxDB: {influx_err}")
 
         return CycleTimeResponse(
             project_id=transition_history.get("project_id", taiga_id),
