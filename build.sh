@@ -154,12 +154,6 @@ info "Step 5/5 — Starting RepoPulse containers …"
 docker compose up -d
 success "Containers started in detached mode."
 
-# ── Step 5.5: Run all endpoints to fill Grafana dashboard ────────────────────
-
-# Wait for healthy return from API and fill dashboards
-info "API health check..."
-docker compose run --rm api python src/fill_dashboards.py
-
 # ── Done ─────────────────────────────────────────────────────────────────────
 echo ""
 success "============================================="
@@ -174,3 +168,9 @@ info "Grafana Dashboard: http://localhost:3000"
 info "Refer to .env file for username and password of Grafana and InfluxDB."
 
 info "To stop:            ./build.sh stop"
+
+# ── Step 5.5: Run all endpoints to fill Grafana dashboard ────────────────────
+
+# Wait for healthy return from API and fill dashboards
+info "Running endpoints..."
+docker compose run --rm api python src/fill_dashboards.py &

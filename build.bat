@@ -133,5 +133,10 @@ echo [INFO]  Refer to .env file for username and password of Grafana and InfluxD
 echo [INFO]  To stop:            build.bat stop
 echo.
 
+REM ── Step 5.5: Run all endpoints to fill Grafana dashboard ────────────────────
+echo Running endpoints...
+start "" /b cmd /c "%DC% run --rm api python src/fill_dashboards.py"
+
+
 endlocal
 exit /b 0
