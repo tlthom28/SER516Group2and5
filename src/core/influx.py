@@ -99,17 +99,18 @@ def _build_loc_point(loc_metric: dict) -> Point:
 
 def write_timeseries_snapshot(snapshot: dict) -> None:
     """Write time-series metric snapshot linked to commit."""
+    required_tags = ("repo_id", "repo_name", "commit_hash", "branch", "granularity")
+    for tag in required_tags:
+        if snapshot.get(tag) is None:
+            raise ValueError(f"Missing required tag for snapshot: {tag}")
+
     client = get_client()
     write_api = client.write_api(write_options=SYNCHRONOUS)
 
     p = Point("timeseries_snapshot")
-    
-    required_tags = ("repo_id", "repo_name", "commit_hash", "branch", "granularity")
+
     for tag in required_tags:
-        v = snapshot.get(tag)
-        if v is None:
-            raise ValueError(f"Missing required tag for snapshot: {tag}")
-        p = p.tag(tag, str(v))
+        p = p.tag(tag, str(snapshot[tag]))
     
     for tag in ("snapshot_type", "file_path", "package_name", "language"):
         v = snapshot.get(tag)
