@@ -834,6 +834,57 @@ def write_taiga_metrics(
     
     return _write_with_retry(points)
 
+
+def write_wip_metrics(project_slug: str, sprints_data: list[dict]) -> WriteResult:
+    """Write Taiga WIP daily metrics to InfluxDB.
+
+    Args:
+        project_slug: Taiga project slug used as a primary tag.
+        sprints_data: List of sprint dicts containing daily_wip entries.
+
+    Returns:
+        WriteResult with success/failure info.
+    """
+    points: list[Point] = []
+
+    for sprint in sprints_data:
+        sprint_id = sprint.get("sprint_id")
+        sprint_name = sprint.get("sprint_name", "")
+        project_id = sprint.get("project_id")
+
+        for daily in sprint.get("daily_wip", []) or []:
+            try:
+                p = Point("taiga_wip").tag("project_slug", project_slug)
+
+                if project_id is not None:
+                    p = p.tag("project_id", str(project_id))
+                if sprint_id is not None:
+                    p = p.tag("sprint_id", str(sprint_id))
+                if sprint_name:
+                    p = p.tag("sprint_name", str(sprint_name))
+
+                p = (
+                    p.field("wip_count", int(daily.get("wip_count", 0)))
+                    .field("backlog_count", int(daily.get("backlog_count", 0)))
+                    .field("done_count", int(daily.get("done_count", 0)))
+                )
+
+                day = daily.get("date")
+                ts = _parse_timestamp(f"{day}T00:00:00+00:00") if day else None
+                if ts:
+                    p = p.time(ts, WritePrecision.NS)
+                else:
+                    p = p.time(datetime.now(timezone.utc), WritePrecision.NS)
+
+                points.append(p)
+            except Exception as e:
+                logger.warning(f"Failed to build taiga WIP point: {e}")
+
+    if not points:
+        return WriteResult(success=False, errors=["No valid points to write"])
+
+    return _write_with_retry(points)
+
 def write_cycle_time_metrics(
     project_slug: str,
     story_cycle_times: list[dict],
