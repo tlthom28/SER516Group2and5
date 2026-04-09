@@ -945,10 +945,19 @@ def write_cycle_time_metrics(
                 parsed_time = _parse_timestamp(end_date)
                 if parsed_time:
                     summary_time = parsed_time
+            # getting the median
+
+            times.sort()
+            if len(times) % 2 == 0:
+                median = (times[len(times) // 2 -1]) + times [ len(times) // 2] / 2.0
+            else:
+                median = times[len(times) // 2]
+
             p = (
                 Point("cycle_time")
                 .tag("project_slug", project_slug)
                 .field("average_hours", sum(times) / len(times))
+                .field("median_hours", median)
                 .field("min_hours", min(times))
                 .field("max_hours", max(times))
                 .field("story_count", len(times))
