@@ -900,6 +900,84 @@ def map_wip_response_to_points(wip_response: dict) -> list:
     
     return points
 
+def write_cycle_time_metrics(
+    project_slug: str,
+    story_cycle_times: list[dict],
+    sprint_id: Optional[int] = None,
+    end_date: Optional[str] = None,
+) -> WriteResult:
+    """Write cycle time metrics to InfluxDB.
+    
+    Args:
+        project_slug: Taiga project slug
+        story_cycle_times: List of dicts with keys of story_id, cycle_time_hours (from compute_cycle_times())
+        sprint_id: Optional sprint ID used as tag
+        end_date: Timestamp for point
+    
+    Returns:
+        WriteResult with success/failure info
+    """
+    points = []
+    
+    # Per-story points
+    for story in story_cycle_times:
+        cycle_time_hours = story.get("cycle_time_hours")
+        # if blank or dne skip
+        if cycle_time_hours is None:
+            continue
+        try:
+            p = (
+                Point("cycle_time_by_story")
+                .tag("project_slug", project_slug)
+                .tag("story_id", str(story.get("story_id", "")))
+                .field("cycle_time_hours", float(cycle_time_hours))
+                .field("cycle_time_days", float(cycle_time_hours) / 24.0)
+            )
+            if sprint_id is not None:
+                p = p.tag("sprint_id", str(sprint_id))
+            p = p.time(datetime.now(timezone.utc), WritePrecision.NS)
+            points.append(p)
+        except Exception as e:
+            logger.warning(f"Failed to build cycle time point for story {story.get('story_id')}: {e}")
+    
+    # Summary point (all stories)
+    
+    # times of each story
+    times = [
+        # get each cycle_time_hours if exists
+        story["cycle_time_hours"]
+        for story in story_cycle_times
+        if story.get("cycle_time_hours") is not None
+    ]
+    
+    # if stories exist
+    if times:
+        try:
+            # use current datetime
+            summary_time = datetime.now(timezone.utc)
+            # if end date given then use that instead
+            if end_date:
+                parsed_time = _parse_timestamp(end_date)
+                if parsed_time:
+                    summary_time = parsed_time
+            p = (
+                Point("cycle_time")
+                .tag("project_slug", project_slug)
+                .field("average_hours", sum(times) / len(times))
+                .field("min_hours", min(times))
+                .field("max_hours", max(times))
+                .field("story_count", len(times))
+            )
+            if sprint_id is not None:
+                p = p.tag("sprint_id", str(sprint_id))
+            p = p.time(summary_time, WritePrecision.NS)
+            points.append(p)
+        except Exception as e:
+            logger.warning(f"Failed to build cycle time point: {e}")
+    if not points:
+        return WriteResult(success=False, errors=["No valid points to write"])
+    
+    return _write_with_retry(points)
 
 
 
