@@ -60,9 +60,7 @@
         "reduceOptions": {
           "values": false,
           "fields": "",
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "text": {},
         "textMode": "auto"
@@ -76,6 +74,15 @@
           },
           "query": "from(bucket:\"repopulse_metrics\") |> range(start: -30d) |> filter(fn: (r) => r._measurement == \"taiga_adopted_work\") |> group(columns: [\"project_slug\"]) |> sum()",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "hide": true,
+          "query": "from(bucket:\"repopulse_metrics\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"taiga_wip\") |> filter(fn: (r) => r._field == \"wip_count\") |> filter(fn: (r) => r.project_slug == \"${project}\")",
+          "refId": "WIP_PATH"
         }
       ],
       "title": "Taiga Sprint Metrics - Adopted Work",
@@ -252,16 +259,226 @@
       ],
       "title": "Adopted Work Percentage",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "WIP Stories",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Daily WIP"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket:\"repopulse_metrics\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"taiga_wip\") |> filter(fn: (r) => r._field == \"wip_count\") |> filter(fn: (r) => r.project_slug == \"${project}\") |> aggregateWindow(every: 1d, fn: last, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "Daily WIP Trend",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "min": 0,
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "WIP_PATH" },
+            "properties": [{ "id": "displayName", "value": "Current WIP" }]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "fields": "",
+          "calcs": ["lastNotNull"]
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "hide": false,
+          "query": "from(bucket:\"repopulse_metrics\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"taiga_wip\") |> filter(fn: (r) => r._field == \"wip_count\") |> filter(fn: (r) => r.project_slug == \"${project}\")",
+          "refId": "WIP_PATH"
+        }
+      ],
+      "title": "Work In Progress (WIP)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "min": 0,
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "CYCLE_PATH" },
+            "properties": [{ "id": "displayName", "value": "Current Cycle Time" }]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "fields": "",
+          "calcs": ["lastNotNull"]
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "hide": false,
+          "query": "from(bucket:\"repopulse_metrics\")|> range(start: v.timeRangeStart, stop: v.timeRangeStop)|> filter(fn: (r) => r._measurement == \"taiga_cycle_time\")|> filter(fn: (r) => r._field == \"cycle_time_hours\")|> filter(fn: (r) => r.project_slug == \"${project}\")|> last()",
+          "refId": "CYCLE_PATH"
+        }
+      ],
+      "title": "Cycle Time (hours)",
+      "type": "stat"
     }
   ],
   "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": [
-    "team2",
-    "taiga",
-    "sprint-metrics"
-  ],
+  "tags": ["team2", "taiga", "sprint-metrics", "wip"],
   "templating": {
     "list": [
       {
@@ -301,7 +518,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Taiga Sprint Metrics - Adopted Work & Velocity",
+  "title": "Taiga Sprint Metrics - Adopted Work, Velocity & WIP",
   "uid": "taiga-metrics",
   "version": 1,
   "weekStart": ""

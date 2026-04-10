@@ -3,6 +3,10 @@
 import requests
 import time
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# timeout for when the endpoint will be skipped
+TIMEOUT = 200
 
 # base url for api
 base_url = "http://api:8080/"
@@ -11,6 +15,18 @@ base_url = "http://api:8080/"
 G2_TAIGA_PAYLOAD = {
     "base_url": "",
     "slug": "jozefmak-t1e2018"
+}
+
+# json payload for group 5's WIP metrics
+G5_WIP_PAYLOAD = {
+    "taiga_url": "https://tree.taiga.io/project/lesly-we-play-sport/backlog"
+}
+
+# json payload for group 5's cycle time metrics
+G5_CYCLE_PAYLOAD = {
+    "slug": "lesly-we-play-sport",
+    "start": "2025-01-01",
+    "end": "2026-04-08"
 }
 
 # json payload for group 2's Github metrics
@@ -49,33 +65,58 @@ def wait_for_health():
     print(f"API did not become healthy within {max_wait}s", file=sys.stderr)
     sys.exit(1)
 
-def class_coverage_run():
-    r = requests.post(f"{base_url}metrics/class-coverage", json=G2_GH_PAYLOAD)
+def g2_class_coverage_run():
+    r = requests.post(f"{base_url}metrics/class-coverage", 
+                      json=G2_GH_PAYLOAD, timeout=TIMEOUT)
 
-def fog_index_run():
-    r = requests.post(f"{base_url}metrics/fog-index", json=G2_GH_PAYLOAD)
+def g2_fog_index_run():
+    r = requests.post(f"{base_url}metrics/fog-index",
+                      json=G2_GH_PAYLOAD, timeout=TIMEOUT)
     
-def method_coverage_run():
-    r = requests.post(f"{base_url}metrics/method-coverage", json=G2_GH_PAYLOAD)
+def g2_method_coverage_run():
+    r = requests.post(f"{base_url}metrics/method-coverage",
+                      json=G2_GH_PAYLOAD, timeout=TIMEOUT)
 
 def g2_taiga_metrics_run():
     r = requests.post(f"{base_url}metrics/taiga-metrics",
-                      json=G2_TAIGA_PAYLOAD)
-    
+                      json=G2_TAIGA_PAYLOAD, timeout=TIMEOUT)
+
+def g5_wip_metrics_run():
+    r = requests.post(f"{base_url}metrics/wip",
+                      json=G5_WIP_PAYLOAD, timeout=TIMEOUT)
+
+def g5_cycle_time_run():
+    r = requests.get(f"{base_url}cycle-time",
+                     params=G5_CYCLE_PAYLOAD, timeout=TIMEOUT)
 
 def g5_gh_metrics_run():
-    r = requests.post(f"{base_url}analyze", json=G5_GH_PAYLOAD)
+    r = requests.post(f"{base_url}analyze",
+                      json=G5_GH_PAYLOAD, timeout=TIMEOUT)
 
 if __name__ == "__main__":
     # get health before starting, so server is ready
     wait_for_health()
     
-    # G2 metrics
-    class_coverage_run()
-    fog_index_run()
-    method_coverage_run()
-    g2_taiga_metrics_run()
+    # all endpoints to be ran {name, method}
+    endpoints = {
+        "g2_class_coverage": g2_class_coverage_run,
+        "g2_fog_index": g2_fog_index_run,
+        "g2_method_coverage": g2_method_coverage_run,
+        "g2_taiga_metrics": g2_taiga_metrics_run,
+        "g5_gh_metrics": g5_gh_metrics_run,
+        "g5_wip_metrics": g5_wip_metrics_run,
+        "g5_cycle_time": g5_cycle_time_run,
+    }
     
-    # G5 metrics
-    g5_gh_metrics_run()
-    # Not sure which metrics for taiga (if complete), please add here!
+    # run endpoints concurrently so that none block each other
+    with ThreadPoolExecutor() as ex:
+        # submit each method to thread pool
+        futures = {ex.submit(method): name for name, method in endpoints.items()}
+        # for each future in the futures run method and return result
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                future.result()
+                print(f"[OK] {name} ran")
+            except Exception as e:
+                print(f"[WARN] {name} failed", file=sys.stderr)

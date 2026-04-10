@@ -18,6 +18,7 @@ from src.core.influx import (
     write_churn_metric,
     write_daily_churn_metrics,
     write_taiga_metrics,
+    write_cycle_time_metrics,
     BATCH_SIZE,
     MAX_RETRIES,
 )
@@ -377,6 +378,25 @@ class TestTaigaWrites:
         assert result.points_failed == 0
         assert "No valid points to write" in result.errors
 
+class TestCycleTimeWrites:
+    """Cycle time write functions should persist sprint and cycle-time points."""
+    @patch("src.core.influx.get_client")
+    def test_write_cycle_time_success(self, mock_get_client):
+        mock_write_api = MagicMock()
+        mock_client = MagicMock()
+        mock_client.write_api.return_value = mock_write_api
+        mock_get_client.return_value = mock_client
+
+        result = write_cycle_time_metrics(
+            project_slug="proj",
+            story_cycle_times=[
+                {"story_id": 1, "cycle_time_hours": 24.0},
+                {"story_id": 2, "cycle_time_hours": 48.0}],
+        )
+        
+        assert isinstance(result, WriteResult)
+        assert result.success is True
+        assert result.points_written > 0
 
 # =========================================================================
 # 6. Error recovery tests
