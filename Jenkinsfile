@@ -28,6 +28,23 @@ pipeline {
             }
         }
 
+        stage('Setup Environment') {
+            steps {
+                script {
+                    echo 'Setting up environment configuration...'
+                    sh '''
+                        if [ ! -f .env ]; then
+                            echo "Creating .env from .env.example"
+                            cp .env.example .env
+                            echo "✓ .env file created successfully"
+                        else
+                            echo "✓ .env file already exists, skipping"
+                        fi
+                    '''
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 sh 'docker compose build --no-cache'
