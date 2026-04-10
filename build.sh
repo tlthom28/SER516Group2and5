@@ -172,5 +172,6 @@ info "To stop:            ./build.sh stop"
 # ── Step 5.5: Run all endpoints to fill Grafana dashboard ────────────────────
 
 # Wait for healthy return from API and fill dashboards
-info "Running endpoints..."
-docker compose run --rm api python src/fill_dashboards.py &
+info "Running endpoints to populate Grafana dashboards..."
+docker compose run --rm api python src/fill_dashboards.py
+success "Dashboard population complete."

@@ -32,11 +32,12 @@ class TestWipApiPersistence:
         assert response.status_code == 200
         mock_write_wip.assert_called_once()
 
-        kwargs = mock_write_wip.call_args.kwargs
-        assert kwargs["project_slug"] == "demo-project"
-        assert len(kwargs["sprints_data"]) == 1
-        assert kwargs["sprints_data"][0]["sprint_name"] == "kanban"
-        assert len(kwargs["sprints_data"][0]["daily_wip"]) == 2
+        # write_wip_metrics is called with a dict as positional argument
+        call_args = mock_write_wip.call_args.args[0]
+        assert call_args["project_slug"] == "demo-project"
+        assert len(call_args["sprints"]) == 1
+        assert call_args["sprints"][0]["sprint_name"] == "kanban"
+        assert len(call_args["sprints"][0]["daily_wip"]) == 2
 
     @patch("src.api.routes.write_wip_metrics")
     @patch("src.api.routes.calculate_daily_wip_all_sprints")
@@ -74,9 +75,10 @@ class TestWipApiPersistence:
         assert response.status_code == 200
         mock_write_wip.assert_called_once()
 
-        kwargs = mock_write_wip.call_args.kwargs
-        assert kwargs["project_slug"] == "team-space"
-        assert len(kwargs["sprints_data"]) == 2
+        # write_wip_metrics is called with a dict as positional argument
+        call_args = mock_write_wip.call_args.args[0]
+        assert call_args["project_slug"] == "team-space"
+        assert len(call_args["sprints"]) == 2
 
     @patch("src.api.routes.write_wip_metrics", side_effect=RuntimeError("influx unavailable"))
     @patch("src.api.routes.calculate_kanban_wip")
