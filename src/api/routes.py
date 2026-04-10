@@ -574,11 +574,14 @@ async def compute_wip(request: Request):
             )
 
             # Write WIP metrics to InfluxDB
-            influx_result = write_wip_metrics(response.dict())
-            if influx_result.success:
-                logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
-            else:
-                logger.warning(f"Failed to write WIP metrics to InfluxDB: {influx_result.errors}")
+            try:
+                influx_result = write_wip_metrics(response.dict())
+                if influx_result.success:
+                    logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
+                else:
+                    logger.warning(f"Failed to write WIP metrics to InfluxDB: {influx_result.errors}")
+            except Exception as write_error:
+                logger.warning(f"Failed to write WIP metrics to InfluxDB: {write_error}")
 
             logger.info(f"Kanban WIP metrics calculated: {len(kanban_metric.daily_wip)} days")
             return response
@@ -628,11 +631,14 @@ async def compute_wip(request: Request):
         )
 
         # Write WIP metrics to InfluxDB
-        influx_result = write_wip_metrics(response.dict())
-        if influx_result.success:
-            logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
-        else:
-            logger.warning(f"Failed to write WIP metrics to InfluxDB: {influx_result.errors}")
+        try:
+            influx_result = write_wip_metrics(response.dict())
+            if influx_result.success:
+                logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
+            else:
+                logger.warning(f"Failed to write WIP metrics to InfluxDB: {influx_result.errors}")
+        except Exception as write_error:
+            logger.warning(f"Failed to write WIP metrics to InfluxDB: {write_error}")
 
         logger.info(f"Daily WIP metrics calculated for {len(sprints_response)} sprints")
         return response

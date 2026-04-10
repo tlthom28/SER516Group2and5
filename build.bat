@@ -134,9 +134,13 @@ echo [INFO]  To stop:            build.bat stop
 echo.
 
 REM ── Step 5.5: Run all endpoints to fill Grafana dashboard ────────────────────
-echo Running endpoints...
-start "" /b cmd /c "%DC% run --rm api python src/fill_dashboards.py"
-
+echo [INFO] Running endpoints to populate Grafana dashboards...
+%DC% run --rm api python src/fill_dashboards.py
+if errorlevel 1 (
+    echo [WARN] Dashboard population encountered errors but continuing...
+) else (
+    echo [OK] Dashboard population complete.
+)
 
 endlocal
 exit /b 0
