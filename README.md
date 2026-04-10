@@ -137,6 +137,7 @@ The API runs at **http://localhost:8080** once the containers are up. Interactiv
 | POST | `/metrics/class-coverage` | Compute JavaDoc coverage for Java classes |
 | POST | `/metrics/method-coverage` | Compute JavaDoc coverage by method visibility (public/private) |
 | POST | `/metrics/taiga-metrics` | Compute adopted work and sprint metrics from Taiga |
+| GET | `/cycle-time` | Compute cycle time metrics for Taiga user stories in a date range |
 
 ## Using the Jobs API
 
@@ -212,6 +213,83 @@ Example response:
 
 After a job completes, the metrics are in InfluxDB and the Grafana dashboard picks them up automatically.
 
+## Using the Cycle Time Endpoint
+
+`GET /cycle-time` computes cycle time metrics for Taiga user stories within a date range. Cycle time measures how long (in hours) a user story takes to move from "In Progress" to "Done". Results are also written to InfluxDB automatically.
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `start` | string | Yes | Start date in `YYYY-MM-DD` format |
+| `end` | string | Yes | End date in `YYYY-MM-DD` format |
+| `slug` | string | No* | Taiga project slug |
+| `taiga_id` | integer | No* | Taiga project ID (alternative to slug) |
+| `base_url` | string | No | Taiga API base URL (defaults to configured URL) |
+| `sprint_id` | integer | No | Optional Taiga sprint/milestone ID to filter by |
+
+\* Either `slug` or `taiga_id` must be provided.
+
+### Example Request
+
+```sh
+curl -X GET "http://localhost:8080/cycle-time?start=2021-05-01&end=2021-06-30&slug=lesly-we-play-sport" \
+  -H "Accept: application/json"
+```
+
+With a sprint filter:
+
+```sh
+curl -X GET "http://localhost:8080/cycle-time?start=2021-05-01&end=2021-06-30&slug=lesly-we-play-sport&sprint_id=101" \
+  -H "Accept: application/json"
+```
+
+### Example Response
+
+```json
+{
+  "project_id": 10,
+  "project_slug": "my-project",
+  "sprint_id": 101,
+  "start_date": "2026-03-01",
+  "end_date": "2026-03-31",
+  "story_cycle_times": [
+    {
+      "story_id": 1,
+      "cycle_time_hours": 48.0
+    },
+    {
+      "story_id": 2,
+      "cycle_time_hours": 24.5
+    },
+    {
+      "story_id": 3,
+      "cycle_time_hours": null
+    }
+  ],
+  "summary": {
+    "average": 36.25,
+    "median": 36.25,
+    "min": 24.5,
+    "max": 48.0
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `story_cycle_times[].cycle_time_hours` | Hours from "In Progress" to "Done" (`null` if story is incomplete) |
+| `summary.average` | Mean cycle time across completed stories |
+| `summary.median` | Median cycle time |
+| `summary.min` / `summary.max` | Shortest and longest cycle times |
+
+| Scenario | Response |
+|----------|----------|
+| Valid request | 200 with cycle time data + summary |
+| Invalid date format | 400 with `{ "detail": "Invalid date format..." }` |
+| Missing slug and taiga_id | 400 with `{ "detail": "Missing 'slug' or 'taiga_id' parameter" }` |
+| start > end | 400 with `{ "detail": "'start' must be less than or equal to 'end'." }` |
+
 ## Environment Variables
 
 | Variable | Default | Purpose |
@@ -265,6 +343,7 @@ project/
       class_coverage.py  # JavaDoc coverage for Java classes
       method_coverage.py # JavaDoc coverage by method visibility
       taiga_metrics.py   # Sprint metrics & adopted work from Taiga
+      cycle_time.py      # Cycle time computation for Taiga user stories
     worker/
       pool.py            # Thread-pool worker pool + job queue
       worker.py          # Background metric writer
