@@ -467,11 +467,11 @@
             "uid": "influxdb"
           },
           "hide": false,
-          "query": "from(bucket:\"repopulse_metrics\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"taiga_cycle_time\")",
+          "query": "from(bucket:\"repopulse_metrics\")|> range(start: v.timeRangeStart, stop: v.timeRangeStop)|> filter(fn: (r) => r._measurement == \"taiga_cycle_time\")|> filter(fn: (r) => r._field == \"cycle_time_hours\")|> filter(fn: (r) => r.project_slug == \"${project}\")|> last()",
           "refId": "CYCLE_PATH"
         }
       ],
-      "title": "Cycle Time",
+      "title": "Cycle Time (hours)",
       "type": "stat"
     }
   ],
