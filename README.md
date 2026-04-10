@@ -2,7 +2,7 @@
 
 The project is a tool that analyzes GitHub repositories and computes software metrics — Lines of Code (LOC), Code Churn, and Work In Progress (WIP). It is built with FastAPI, InfluxDB, and Grafana, all running in Docker containers.
 
-This project was built as part of SER 516 at Arizona State University.
+This project was built as part of SER 516 at Arizona State University..
 
 ## Attribution & Sources
 

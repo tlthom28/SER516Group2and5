@@ -573,13 +573,12 @@ async def compute_wip(request: Request):
                 sprints=[sprint_resp],
             )
 
-            try:
-                write_wip_metrics(
-                    project_slug=response.project_slug,
-                    sprints_data=[sprint_resp],
-                )
-            except Exception as influx_err:
-                logger.warning(f"Failed to write WIP metrics to InfluxDB: {influx_err}")
+            # Write WIP metrics to InfluxDB
+            influx_result = write_wip_metrics(response.dict())
+            if influx_result.success:
+                logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
+            else:
+                logger.warning(f"Failed to write WIP metrics to InfluxDB: {influx_result.errors}")
 
             logger.info(f"Kanban WIP metrics calculated: {len(kanban_metric.daily_wip)} days")
             return response
@@ -628,13 +627,12 @@ async def compute_wip(request: Request):
             sprints=sprints_response,
         )
 
-        try:
-            write_wip_metrics(
-                project_slug=response.project_slug,
-                sprints_data=sprints_response,
-            )
-        except Exception as influx_err:
-            logger.warning(f"Failed to write WIP metrics to InfluxDB: {influx_err}")
+        # Write WIP metrics to InfluxDB
+        influx_result = write_wip_metrics(response.dict())
+        if influx_result.success:
+            logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
+        else:
+            logger.warning(f"Failed to write WIP metrics to InfluxDB: {influx_result.errors}")
 
         logger.info(f"Daily WIP metrics calculated for {len(sprints_response)} sprints")
         return response

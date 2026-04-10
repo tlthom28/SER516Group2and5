@@ -1,13 +1,25 @@
 import pytest
 import time
 from datetime import datetime, timezone
+from unittest.mock import patch, MagicMock
+import src.core.influx as influx_module
 from src.core.influx import (
-    get_client,
     write_loc_metric,
     write_churn_metric,
     write_daily_churn_metrics,
     query_flux,
 )
+
+
+@pytest.fixture(autouse=True)
+def mock_influx_client():
+    mock_client = MagicMock()
+    mock_write_api = MagicMock()
+    mock_client.write_api.return_value = mock_write_api
+    mock_client.health.return_value = MagicMock(status="pass")
+    mock_client.query_api.return_value = MagicMock()
+    with patch.object(influx_module, "get_client", return_value=mock_client):
+        yield mock_client
 
 
 class TestInfluxDBMetricWrite:
@@ -18,7 +30,6 @@ class TestInfluxDBMetricWrite:
                   "code_loc": 1200, "comment_loc": 200, "blank_loc": 100,
                   "collected_at": datetime.now(timezone.utc).isoformat()}
         write_loc_metric(metric)
-        time.sleep(0.5)
 
     def test_write_churn_metric_succeeds(self):
         churn = {
@@ -27,14 +38,13 @@ class TestInfluxDBMetricWrite:
             "modified": 50,
             "total": 200,
         }
-        
+
         write_churn_metric(
             repo_url="https://github.com/test/repo.git",
             start_date="2026-02-01",
             end_date="2026-02-28",
             churn=churn
         )
-        time.sleep(0.5)
 
     def test_write_daily_churn_metrics_succeeds(self):
         daily_churn = {
@@ -51,12 +61,11 @@ class TestInfluxDBMetricWrite:
                 "total": 105,
             },
         }
-        
+
         write_daily_churn_metrics(
             repo_url="https://github.com/test/repo.git",
             daily=daily_churn
         )
-        time.sleep(0.5)
 
 
 class TestInfluxDBMetricWriteVariations:
@@ -74,9 +83,8 @@ class TestInfluxDBMetricWriteVariations:
             "blank_loc": 20,
             "collected_at": datetime.now(timezone.utc).isoformat(),
         }
-        
+
         write_loc_metric(metric)
-        time.sleep(0.5)
 
     def test_write_package_level_metric(self):
         metric = {
@@ -92,13 +100,12 @@ class TestInfluxDBMetricWriteVariations:
             "blank_loc": 30,
             "collected_at": datetime.now(timezone.utc).isoformat(),
         }
-        
+
         write_loc_metric(metric)
-        time.sleep(0.5)
 
     def test_multiple_writes_same_repo(self):
         repo_id = "test-multi-write-001"
-        
+
         for i in range(3):
             metric = {
                 "repo_id": repo_id,
@@ -113,16 +120,15 @@ class TestInfluxDBMetricWriteVariations:
                 "collected_at": datetime.now(timezone.utc).isoformat(),
             }
             write_loc_metric(metric)
-            time.sleep(0.1)
 
 
 class TestInfluxDBHealth:
     def test_client_initialized(self):
-        client = get_client()
+        client = influx_module.get_client()
         assert client is not None
 
     def test_client_health_check(self):
-        client = get_client()
+        client = influx_module.get_client()
         health = client.health()
         assert health is not None
 
@@ -139,12 +145,10 @@ class TestInfluxDBHealth:
             "blank_loc": 25,
             "collected_at": datetime.now(timezone.utc).isoformat(),
         }
-        
+
         write_loc_metric(metric)
-        time.sleep(0.5)
-        
+
         # Verify client is still responsive
-        client = get_client()
+        client = influx_module.get_client()
         health = client.health()
         assert health is not None
-

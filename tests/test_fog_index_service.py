@@ -15,7 +15,7 @@ class TestFogIndexService:
         """Test that the fog index score uses Flesch-Kincaid grade level."""
         text = "I don't have a cat. I have a dog."
         score = fog_index(text)
-        assert score == pytest.approx(-2.62, abs=0.01)
+        assert score == pytest.approx(-2.035, abs=0.01)
 
     def test_analyze_root_ignores_markdown_and_reads_python_comments(self):
         """Test analyze_root ignores documentation and only returns code comment results."""

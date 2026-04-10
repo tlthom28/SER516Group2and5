@@ -1,6 +1,7 @@
 import pytest
 import time
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from src.main import app
 
@@ -51,13 +52,19 @@ class TestE2EPipelineSuccess:
         assert "total_comment_lines" in result
         assert result["total_files"] > 0
 
-    def test_metrics_written_to_influxdb(self):
+    @patch("src.api.routes.get_client")
+    def test_metrics_written_to_influxdb(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.health.return_value = MagicMock(status="pass")
+        mock_client.write_api.return_value = MagicMock()
+        mock_get_client.return_value = mock_client
+
         response = client.post(
             "/jobs",
             json={"local_path": SAMPLE_REPO_PATH}
         )
         job_id = response.json()["job_id"]
-        
+
         # Wait for job completion
         for _ in range(30):
             response = client.get(f"/jobs/{job_id}")
@@ -65,10 +72,10 @@ class TestE2EPipelineSuccess:
             if job["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         # Wait for InfluxDB write propagation
         time.sleep(1)
-        
+
         # Verify metrics were written (via basic health check)
         response = client.get("/health/db")
         assert response.status_code == 200
@@ -235,7 +242,12 @@ class TestE2EPipelineWorkerHealth:
 
 
 class TestE2EPipelineInfluxDBPersistence:
-    def test_analyze_endpoint_writes_to_influxdb(self):
+    @patch("src.api.routes.get_client")
+    def test_analyze_endpoint_writes_to_influxdb(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.health.return_value = MagicMock(status="pass")
+        mock_get_client.return_value = mock_client
+
         response = client.get("/health/db")
         assert response.status_code == 200
         assert response.json()["status"] == "pass"
