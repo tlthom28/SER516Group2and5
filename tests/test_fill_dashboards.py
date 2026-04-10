@@ -2,9 +2,9 @@
 from unittest.mock import patch, MagicMock
 from src.fill_dashboards import (
     wait_for_health,
-    class_coverage_run,
-    fog_index_run,
-    method_coverage_run,
+    g2_class_coverage_run,
+    g2_fog_index_run,
+    g2_method_coverage_run,
     g2_taiga_metrics_run,
     g5_gh_metrics_run,
 )
@@ -31,21 +31,21 @@ def test_wait_for_health_timeout(mock_get, mock_sleep):
 @patch("src.fill_dashboards.requests.post")
 def test_class_coverage_run(mock_post):
     mock_post.return_value = MagicMock(status_code=200)
-    class_coverage_run()
+    g2_class_coverage_run()
     mock_post.assert_called_once()
 
 
 @patch("src.fill_dashboards.requests.post")
 def test_fog_index_run(mock_post):
     mock_post.return_value = MagicMock(status_code=200)
-    fog_index_run()
+    g2_fog_index_run()
     mock_post.assert_called_once()
 
 
 @patch("src.fill_dashboards.requests.post")
 def test_method_coverage_run(mock_post):
     mock_post.return_value = MagicMock(status_code=200)
-    method_coverage_run()
+    g2_method_coverage_run()
     mock_post.assert_called_once()
 
 
