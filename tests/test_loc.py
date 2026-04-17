@@ -528,6 +528,118 @@ class TestLOCEndpoint:
         assert "modules" in data
         assert isinstance(data["modules"], list)
         assert len(data["modules"]) >= 1
+
+
+class TestExactSampleFileLOCCounts:
+    """Exact LOC counts validated against each sample file. 
+    These are based on manual counting and should be stable unless the sample files are modified."""
+
+    # ── Java ─────────────────────────────────────────────────────────────
+
+    def test_calculator_java_exact(self):
+        result = count_loc_in_file(
+            _sample_path("java_project", "src", "com", "example", "Calculator.java")
+        )
+        assert result is not None
+        assert result.total_lines == 26
+        assert result.loc == 12
+        assert result.blank_lines == 8
+        assert result.excluded_lines == 6
+        assert result.comment_lines == 0
+        assert result.weighted_loc == pytest.approx(12.0)
+
+    def test_main_java_exact(self):
+        result = count_loc_in_file(
+            _sample_path("java_project", "src", "com", "example", "Main.java")
+        )
+        assert result is not None
+        assert result.total_lines == 11
+        assert result.loc == 6
+        assert result.blank_lines == 3
+        assert result.excluded_lines == 2
+        assert result.comment_lines == 0
+        assert result.weighted_loc == pytest.approx(6.0)
+
+    def test_stringhelper_java_exact(self):
+        result = count_loc_in_file(
+            _sample_path("java_project", "src", "com", "example", "util", "StringHelper.java")
+        )
+        assert result is not None
+        assert result.total_lines == 14
+        assert result.loc == 7
+        assert result.blank_lines == 4
+        assert result.excluded_lines == 3
+        assert result.comment_lines == 0
+        assert result.weighted_loc == pytest.approx(7.0)
+
+    # ── Python ───────────────────────────────────────────────────────────
+
+    def test_calculator_py_exact(self):
+        result = count_loc_in_file(_sample_path("python_project", "calculator.py"))
+        assert result is not None
+        assert result.total_lines == 20
+        assert result.loc == 11
+        assert result.blank_lines == 7
+        assert result.excluded_lines == 0
+        assert result.comment_lines == 2  # two single-line docstrings
+        assert result.weighted_loc == pytest.approx(12.0)  # 11×1.0 + 2×0.5
+
+    def test_main_py_exact(self):
+        result = count_loc_in_file(_sample_path("python_project", "main.py"))
+        assert result is not None
+        assert result.total_lines == 13
+        assert result.loc == 7
+        assert result.blank_lines == 5
+        assert result.excluded_lines == 0
+        assert result.comment_lines == 1  # module-level docstring
+        assert result.weighted_loc == pytest.approx(7.5)   # 7×1.0 + 1×0.5
+
+    # ── TypeScript ───────────────────────────────────────────────────────
+
+    def test_calculator_ts_exact(self):
+        result = count_loc_in_file(_sample_path("ts_project", "src", "calculator.ts"))
+        assert result is not None
+        assert result.total_lines == 24
+        assert result.loc == 11
+        assert result.blank_lines == 7
+        assert result.excluded_lines == 6
+        assert result.comment_lines == 0
+        assert result.weighted_loc == pytest.approx(11.0)
+
+    def test_index_ts_exact(self):
+        result = count_loc_in_file(_sample_path("ts_project", "src", "index.ts"))
+        assert result is not None
+        assert result.total_lines == 6
+        assert result.loc == 4
+        assert result.blank_lines == 2
+        assert result.excluded_lines == 0
+        assert result.comment_lines == 0
+        assert result.weighted_loc == pytest.approx(4.0)
+
+
+class TestExactDirectoryLOCTotals:
+    """Validate project-level totals for each sample project directory."""
+
+    def test_java_project_exact_totals(self):
+        project = count_loc_in_directory(_sample_path("java_project"))
+        assert project.total_files == 3
+        assert project.total_loc == 25
+        assert project.total_comment_lines == 0
+        assert project.total_weighted_loc == pytest.approx(25.0)
+
+    def test_python_project_exact_totals(self):
+        project = count_loc_in_directory(_sample_path("python_project"))
+        assert project.total_files == 2
+        assert project.total_loc == 18
+        assert project.total_comment_lines == 3
+        assert project.total_weighted_loc == pytest.approx(19.5)  # 18×1.0 + 3×0.5
+
+    def test_ts_project_exact_totals(self):
+        project = count_loc_in_directory(_sample_path("ts_project"))
+        assert project.total_files == 2
+        assert project.total_loc == 15
+        assert project.total_comment_lines == 0
+        assert project.total_weighted_loc == pytest.approx(15.0)
         for m in data["modules"]:
             assert "module" in m
             assert "loc" in m
