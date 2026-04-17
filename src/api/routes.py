@@ -1212,7 +1212,8 @@ async def compute_method_coverage(request: Request):
             
             public_cov = coverage_data.get("public", {}).get("coverage", 0.0)
             protected_cov = coverage_data.get("protected", {}).get("coverage", 0.0)
-            package_cov = coverage_data.get("package", {}).get("coverage", 0.0)
+            # Service groups package-private methods under "default".
+            package_cov = coverage_data.get("default", {}).get("coverage", 0.0)
             private_cov = coverage_data.get("private", {}).get("coverage", 0.0)
             
             # Write to InfluxDB
@@ -1458,5 +1459,4 @@ async def get_cycle_time_metrics(
     except Exception as e:
         logger.error(f"Cycle time metrics computation failed: {e}")
         return JSONResponse(status_code=500, content={"detail": str(e)})
-
 

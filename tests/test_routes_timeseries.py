@@ -222,6 +222,40 @@ def test_method_coverage_missing_params():
     assert resp.status_code == 400
 
 
+@patch("src.api.routes.write_method_coverage_metrics")
+@patch("src.api.routes.scan_method_coverage_repo")
+@patch("src.api.routes.GitRepoCloner")
+def test_method_coverage_uses_default_bucket_for_package_private(
+    mock_cloner_cls,
+    mock_scan_repo,
+    mock_write_metrics,
+):
+    mock_cloner = MagicMock()
+    mock_cloner.clone.return_value = "/tmp/repo"
+    mock_cloner.commit_hash = "abc123"
+    mock_cloner_cls.return_value = mock_cloner
+
+    mock_scan_repo.return_value = {
+        "public": {"coverage": 100.0},
+        "protected": {"coverage": 50.0},
+        "default": {"coverage": 75.0},
+        "private": {"coverage": 25.0},
+        "all": {"coverage": 60.0},
+    }
+
+    resp = client.post(
+        "/metrics/method-coverage",
+        json={"user": "octocat", "repo": "hello-world", "branch": "main"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["package_coverage_percent"] == 75.0
+    assert data["summary"]["default"]["coverage"] == 75.0
+    mock_write_metrics.assert_called_once()
+    assert mock_write_metrics.call_args.kwargs["package_coverage"] == 75.0
+
+
 def test_taiga_metrics_missing_params():
     resp = client.post("/metrics/taiga-metrics", json={})
     assert resp.status_code == 400
