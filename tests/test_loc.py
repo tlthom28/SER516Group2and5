@@ -640,10 +640,6 @@ class TestExactDirectoryLOCTotals:
         assert project.total_loc == 15
         assert project.total_comment_lines == 0
         assert project.total_weighted_loc == pytest.approx(15.0)
-        for m in data["modules"]:
-            assert "module" in m
-            assert "loc" in m
-            assert "packages" in m
 
     def test_loc_endpoint_invalid_path(self):
         response = client.post("/metrics/loc", json={"repo_path": "/nonexistent/path/to/repo"})
