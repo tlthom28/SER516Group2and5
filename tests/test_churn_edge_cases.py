@@ -107,19 +107,20 @@ class TestMergeCommitSafe:
     def test_merge_commit_safe(self, tmp_path):
         repo = str(tmp_path)
         _init_repo(repo)
+        default_branch = _run(["git", "branch", "--show-current"], cwd=repo)
 
         _commit_file(repo, "shared.txt", "base\n", "2026-05-01T10:00:00+00:00")
 
         _run(["git", "checkout", "-b", "feature"], cwd=repo)
         _commit_file(repo, "feature.txt", "feature work\n", "2026-05-02T10:00:00+00:00")
 
-        _run(["git", "checkout", "master"], cwd=repo)
+        _run(["git", "checkout", default_branch], cwd=repo)
         _commit_file(repo, "main_work.txt", "main work\n", "2026-05-03T10:00:00+00:00")
 
         try:
             _run(["git", "merge", "--no-ff", "feature", "-m", "merge feature"], cwd=repo)
         except subprocess.CalledProcessError:
-            _run(["git", "checkout", "main"], cwd=repo)
+            _run(["git", "checkout", default_branch], cwd=repo)
             _commit_file(repo, "main_work.txt", "main work\n", "2026-05-03T10:00:00+00:00")
             _run(["git", "merge", "--no-ff", "feature", "-m", "merge feature"], cwd=repo)
 
