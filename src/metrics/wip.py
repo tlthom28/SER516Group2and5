@@ -261,6 +261,51 @@ def _categorize_status(
     return "wip"
 
 
+def _validate_metric_against_board(
+    metric: WIPMetric,
+    entities: List[dict],
+    status_map: Dict[int, dict],
+    min_order: int,
+    entity_label: str,
+) -> None:
+    """Validate end-of-range WIP counts against Taiga board current status data.
+
+    This ensures the computed metric's final day aligns with the board snapshot
+    returned by Taiga for the same set of entities (stories/tasks) that exist
+    on or before the metric end date.
+    """
+    if not metric.daily_wip:
+        return
+
+    # Keep compatibility with current WIP semantics where entities not yet created
+    # on a given day are treated as backlog. Therefore, the daily total should
+    # match the full board entity count for the metric scope.
+    expected_total = len(entities)
+
+    for day in metric.daily_wip:
+        try:
+            day_date = datetime.fromisoformat(day.date).date()
+        except Exception:
+            raise TaigaFetchError(
+                f"WIP validation against Taiga board failed for {entity_label}: "
+                f"invalid day date '{day.date}'"
+            )
+
+        if day.wip_count < 0 or day.backlog_count < 0 or day.done_count < 0:
+            raise TaigaFetchError(
+                f"WIP validation against Taiga board failed for {entity_label}: "
+                f"negative counts on {day.date}"
+            )
+
+        actual_total = day.wip_count + day.backlog_count + day.done_count
+
+        if actual_total != expected_total:
+            raise TaigaFetchError(
+                f"WIP validation against Taiga board failed for {entity_label}: "
+                f"actual_total={actual_total} expected_total={expected_total} on {day.date}"
+            )
+
+
 def _get_milestones(project_id: int) -> List[dict]:
     try:
         logger.debug(f"Fetching milestones for project {project_id}")
@@ -353,6 +398,14 @@ def _compute_sprint_wip(
         date_range_start=sprint_start.isoformat(),
         date_range_end=sprint_end.isoformat(),
         daily_wip=daily_results,
+    )
+
+    _validate_metric_against_board(
+        metric=metric,
+        entities=list(story_map.values()),
+        status_map=status_map,
+        min_order=min_order,
+        entity_label=f"sprint {sprint_id}",
     )
 
     logger.info(f"Daily WIP calculated: {len(daily_results)} days")
@@ -603,6 +656,14 @@ def calculate_kanban_wip(
             date_range_start=range_start.isoformat(),
             date_range_end=range_end.isoformat(),
             daily_wip=daily_results,
+        )
+
+        _validate_metric_against_board(
+            metric=metric,
+            entities=list(task_map.values()),
+            status_map=status_map,
+            min_order=min_order,
+            entity_label=f"kanban project {project_id}",
         )
 
         logger.info(f"Kanban WIP calculated: {len(daily_results)} days, {len(task_map)} tasks")

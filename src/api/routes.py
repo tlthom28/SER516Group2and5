@@ -575,7 +575,7 @@ async def compute_wip(request: Request):
 
             # Write WIP metrics to InfluxDB
             try:
-                influx_result = write_wip_metrics(response.dict())
+                influx_result = write_wip_metrics(response.model_dump())
                 if influx_result.success:
                     logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
                 else:
@@ -632,7 +632,7 @@ async def compute_wip(request: Request):
 
         # Write WIP metrics to InfluxDB
         try:
-            influx_result = write_wip_metrics(response.dict())
+            influx_result = write_wip_metrics(response.model_dump())
             if influx_result.success:
                 logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
             else:
