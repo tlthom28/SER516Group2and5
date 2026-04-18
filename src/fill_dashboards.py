@@ -4,12 +4,18 @@ import requests
 import time
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
 
 # timeout for when the endpoint will be skipped
 TIMEOUT = 200
 
 # base url for api
 base_url = "http://api:8080/"
+
+# dynamic date range — always fetch last 5 years up to today
+_today = datetime.utcnow().date()
+_five_years_ago = (_today - timedelta(days=5*365)).isoformat()
+_today_str = _today.isoformat()
 
 # json payload for group 2's taiga metrics
 G2_TAIGA_PAYLOAD = {
@@ -22,11 +28,11 @@ G5_WIP_PAYLOAD = {
     "taiga_url": "https://tree.taiga.io/project/lesly-we-play-sport/backlog"
 }
 
-# json payload for group 5's cycle time metrics
+# json payload for group 5's cycle time metrics — dynamic date range
 G5_CYCLE_PAYLOAD = {
     "slug": "lesly-we-play-sport",
-    "start": "2025-01-01",
-    "end": "2026-04-08"
+    "start": _five_years_ago,
+    "end": _today_str,
 }
 
 # json payload for group 2's Github metrics
@@ -40,7 +46,7 @@ G2_GH_PAYLOAD = {
 G5_GH_PAYLOAD = {
     "repo_url": "https://github.com/pallets/flask.git",
     "start_date": "2026-03-01",
-    "end_date": "2026-03-31"
+    "end_date": _today_str,
 }
 
 def wait_for_health():

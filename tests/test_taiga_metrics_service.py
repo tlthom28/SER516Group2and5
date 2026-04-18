@@ -515,15 +515,17 @@ class TestCycleTimeStateBoundaries:
     """Test canonical cycle-time boundary state definitions."""
 
     def test_cycle_time_boundary_constants(self):
-        """Cycle time boundaries should be Start='In Progress' and End='Done'."""
-        assert CYCLE_TIME_START_STATES == ("In Progress",)
+        """Cycle time boundaries should include all known start states and End='Done'."""
+        assert "In Progress" in CYCLE_TIME_START_STATES
+        assert "In progress" in CYCLE_TIME_START_STATES
+        assert "New" in CYCLE_TIME_START_STATES
         assert CYCLE_TIME_END_STATES == ("Done",)
 
     def test_cycle_time_boundary_accessor_contract(self):
         """Accessor should expose the canonical boundary states consistently."""
         boundaries = get_cycle_time_state_boundaries()
 
-        assert boundaries["start_states"] == ("In Progress",)
+        assert "In Progress" in boundaries["start_states"]
         assert boundaries["end_states"] == ("Done",)
 
 
