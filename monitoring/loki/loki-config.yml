@@ -6,19 +6,18 @@ server:
   http_listen_port: 3100
 
 common:
-  ring:
-    instance_addr: 127.0.0.1
-    path-prefix: /loki
-    storage:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
     filesystem:
       chunks_directory: /loki/chunks
       rules_directory: /loki/rules
-    
-    # below two essentially tells loki to not look for or cooperate with other loki containers
-    replication_factor: 1
-    ring:
-      kvstore:
-        store: inmemory
+
+  # below two essentially tells loki to not look for or cooperate with other loki containers
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
 
 # needs a from start to operate, just did jan 1st
 schema_config:
