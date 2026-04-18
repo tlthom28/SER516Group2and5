@@ -40,6 +40,26 @@ def compute_cycle_times(user_stories: List[Dict[str, Any]]) -> List[Dict[str, An
                         logger.debug("Found end_time for story_id=%s: %s", story_id, end_time)
                 break
 
+        # Fallback: if no explicit start transition, use the from_status of the
+        # first end-state transition (e.g. New → Done with no In Progress step)
+        if not start_time and not end_time:
+            for t in transitions_sorted:
+                if t.get("status") in CYCLE_TIME_END_STATES:
+                    from_status = t.get("from_status")
+                    if from_status in CYCLE_TIME_START_STATES:
+                        # Use story created_date as start if available
+                        created_date = story.get("created_date")
+                        if created_date:
+                            start_time = created_date
+                        else:
+                            start_time = transitions_sorted[0].get("timestamp")
+                        end_time = t.get("timestamp")
+                        logger.debug(
+                            "Fallback: using created_date as start for story_id=%s",
+                            story_id,
+                        )
+                    break
+
         if not start_time or not end_time:
             logger.info("Missing start or end time for story_id=%s (start=%s end=%s); setting None", story_id, start_time, end_time)
             results.append({"story_id": story_id, "cycle_time_hours": None})

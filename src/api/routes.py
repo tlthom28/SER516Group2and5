@@ -1408,6 +1408,7 @@ async def get_cycle_time_metrics(
 
             for transition in story.get("transitions", []):
                 to_status = transition.get("to_status")
+                from_status = transition.get("from_status")
                 timestamp = transition.get("timestamp")
                 if not to_status or not timestamp:
                     continue
@@ -1417,17 +1418,18 @@ async def get_cycle_time_metrics(
                 except ValueError:
                     continue
 
-                if start_date <= transition_dt.date() <= end_date:
-                    filtered_transitions.append(
-                        {
-                            "status": to_status,
-                            "timestamp": transition_dt.isoformat(),
-                        }
-                    )
+                filtered_transitions.append(
+                    {
+                        "status": to_status,
+                        "from_status": from_status,
+                        "timestamp": transition_dt.isoformat(),
+                    }
+                )
 
             stories_for_cycle_time.append(
                 {
                     "story_id": story.get("user_story_id"),
+                    "created_date": story.get("created_date", ""),
                     "transitions": filtered_transitions,
                 }
             )
