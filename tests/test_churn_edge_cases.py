@@ -52,8 +52,8 @@ class TestDateBoundariesInclusive:
         repo = str(tmp_path)
         _init_repo(repo)
 
-        sha_start = _commit_file(repo, "a.txt", "start\n", "2026-02-01T00:00:00+00:00")
-        sha_end = _commit_file(repo, "b.txt", "end\n", "2026-02-03T23:59:59+00:00")
+        sha_start = _commit_file(repo, "a.py", "start\n", "2026-02-01T00:00:00+00:00")
+        sha_end = _commit_file(repo, "b.py", "end\n", "2026-02-03T23:59:59+00:00")
 
         commits = get_commit_history(repo, "2026-02-01", "2026-02-03")
         returned_hashes = {c["hash"] for c in commits}
@@ -84,9 +84,9 @@ class TestRenameCommitSafe:
         repo = str(tmp_path)
         _init_repo(repo)
 
-        _commit_file(repo, "old.txt", "line1\nline2\nline3\n", "2026-04-01T10:00:00+00:00")
+        _commit_file(repo, "old.py", "line1\nline2\nline3\n", "2026-04-01T10:00:00+00:00")
 
-        _run(["git", "mv", "old.txt", "new.txt"], cwd=repo)
+        _run(["git", "mv", "old.py", "new.py"], cwd=repo)
         env = {
             "GIT_AUTHOR_DATE": "2026-04-02T10:00:00+00:00",
             "GIT_COMMITTER_DATE": "2026-04-02T10:00:00+00:00",
@@ -109,19 +109,19 @@ class TestMergeCommitSafe:
         _init_repo(repo)
         default_branch = _run(["git", "branch", "--show-current"], cwd=repo)
 
-        _commit_file(repo, "shared.txt", "base\n", "2026-05-01T10:00:00+00:00")
+        _commit_file(repo, "shared.py", "base\n", "2026-05-01T10:00:00+00:00")
 
         _run(["git", "checkout", "-b", "feature"], cwd=repo)
-        _commit_file(repo, "feature.txt", "feature work\n", "2026-05-02T10:00:00+00:00")
+        _commit_file(repo, "feature.py", "feature work\n", "2026-05-02T10:00:00+00:00")
 
         _run(["git", "checkout", default_branch], cwd=repo)
-        _commit_file(repo, "main_work.txt", "main work\n", "2026-05-03T10:00:00+00:00")
+        _commit_file(repo, "main_work.py", "main work\n", "2026-05-03T10:00:00+00:00")
 
         try:
             _run(["git", "merge", "--no-ff", "feature", "-m", "merge feature"], cwd=repo)
         except subprocess.CalledProcessError:
             _run(["git", "checkout", default_branch], cwd=repo)
-            _commit_file(repo, "main_work.txt", "main work\n", "2026-05-03T10:00:00+00:00")
+            _commit_file(repo, "main_work.py", "main work\n", "2026-05-03T10:00:00+00:00")
             _run(["git", "merge", "--no-ff", "feature", "-m", "merge feature"], cwd=repo)
 
         merge_sha = _get_head_sha(repo)

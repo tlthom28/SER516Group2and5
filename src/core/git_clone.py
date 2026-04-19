@@ -3,7 +3,7 @@ import os
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 logger = logging.getLogger("repopulse.core.git_clone")
@@ -64,13 +64,18 @@ class GitRepoCloner:
         from *since_date* onwards become available for log / diff operations
         without downloading the entire repository history.
         """
+        fetch_since = _history_fetch_since_date(since_date)
         env = os.environ.copy()
         env["GIT_TERMINAL_PROMPT"] = "0"
         cmd = [
             "git", "-C", repo_path,
-            "fetch", "--shallow-since", since_date, "origin",
+            "fetch", "--shallow-since", fetch_since, "origin",
         ]
-        logger.info(f"Deepening clone since {since_date}")
+        logger.info(
+            "Deepening clone since %s (requested start %s)",
+            fetch_since,
+            since_date,
+        )
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=120, env=env,
@@ -127,3 +132,19 @@ class GitRepoCloner:
         if self.temp_dir and os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
             self.temp_dir = None
+
+
+def _history_fetch_since_date(since_date: str) -> str:
+    """Fetch one extra day of history so boundary commits have parents.
+
+    Churn uses ``git show --numstat`` per commit. With a shallow clone fetched
+    starting exactly at the requested date, the first in-range commit may be a
+    shallow boundary whose parent is missing, causing Git to report the entire
+    file contents as additions. Pulling one extra day of history keeps the diff
+    for the boundary commit anchored to its real parent in common cases.
+    """
+    try:
+        parsed = date.fromisoformat(since_date)
+    except ValueError:
+        return since_date
+    return (parsed - timedelta(days=1)).isoformat()
