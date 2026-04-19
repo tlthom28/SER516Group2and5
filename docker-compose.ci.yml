@@ -63,9 +63,21 @@ services:
     networks:
       - repopulse-net
 
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: repopulse-loki
+    # already no host port mapping
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    networks:
+      - repopulse-net
+
 volumes:
   influxdb-data:
   grafana-data:
+  loki-data:
 
 networks:
   repopulse-net:
