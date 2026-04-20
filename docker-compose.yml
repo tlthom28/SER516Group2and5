@@ -50,9 +50,10 @@ services:
       - ./monitoring/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - influxdb
+      - loki
     networks:
       - repopulse-net
-  
+
   loki:
     image: grafana/loki:3.4.2
     container_name: project-loki
@@ -64,6 +65,19 @@ services:
     networks:
       - repopulse-net
 
+  alloy:
+    image: grafana/alloy:v1.7.5
+    container_name: project-alloy
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
+    ports:
+      - "12345:12345"
+    depends_on:
+      - loki
+    networks:
+      - repopulse-net
 
 volumes:
   influxdb-data:
