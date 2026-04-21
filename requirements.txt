@@ -1,9 +1,11 @@
 fastapi
 uvicorn
 requests
-prometheus-client
 pydantic
 pytest
 httpx
 pytest-cov
 influxdb-client
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-grpc
