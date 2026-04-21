@@ -12,6 +12,8 @@ services:
       - INFLUX_TOKEN=${INFLUX_INIT_TOKEN}
       - INFLUX_ORG=${INFLUX_ORG}
       - INFLUX_BUCKET=${INFLUX_BUCKET}
+      - OTEL_SERVICE_NAME=repopulse-api
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4317
     depends_on:
       - influxdb
     networks:

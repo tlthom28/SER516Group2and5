@@ -70,3 +70,19 @@ loki.write "loki" {
     env = "dev",
   }
 }
+
+// Receive OTLP logs pushed directly from repopulse
+otelcol.receiver.otlp "api_logs" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  output {
+    logs = [otelcol.exporter.loki.default.input]
+  }
+}
+
+// Convert OTLP log to Loki and forward to Loki
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.loki.receiver]
+}
