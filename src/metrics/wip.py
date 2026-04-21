@@ -408,7 +408,15 @@ def _compute_sprint_wip(
         entity_label=f"sprint {sprint_id}",
     )
 
-    logger.info(f"Daily WIP calculated: {len(daily_results)} days")
+    logger.info("WIP sprint calculation complete",
+                extra={
+                    "project_id": project_id,
+                    "project_slug": slug,
+                    "sprint_id": sprint_id,
+                    "days_computed": len(daily_results),
+                    "date_range_start": sprint_start.isoformat(),
+                    "date_range_end": sprint_end.isoformat()
+                })
     return metric
 
 
@@ -488,7 +496,11 @@ def calculate_daily_wip_all_sprints(
             logger.warning(f"Skipping milestone {mid}: {e}")
             continue
 
-    logger.info(f"Calculated WIP for {len(results)} sprints")
+    logger.info("WIP for all sprints calculation complete",
+                extra={
+                    "project_slug": slug,
+                    "sprint_count": len(results)
+                })
     return results
 
 
@@ -667,6 +679,15 @@ def calculate_kanban_wip(
         )
 
         logger.info(f"Kanban WIP calculated: {len(daily_results)} days, {len(task_map)} tasks")
+        logger.info("WIP kanban calculation complete",
+                    extra={
+                        "project_id": project_id,
+                        "project_slug": slug,
+                        "days_computed": len(daily_results),
+                        "task_count": len(task_map),
+                        "date_range_start": range_start.isoformat(),
+                        "date_range_end": range_end.isoformat(),
+                    })
         return metric
 
     except (ValueError, TaigaFetchError) as e:
