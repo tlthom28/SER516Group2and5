@@ -80,6 +80,9 @@ All metric calculations and integrations were implemented by the development tea
    .\build.bat
    ```
 
+After the build, please consult `docs/Ngrok setup Process with Influx and Granfana.docx` for end-to-end deployment steps. That document includes a section for setting up a local InfluxDB with an external Grafana instance (and ngrok instructions).
+See `docs/Ngrok setup Process with Influx and Granfana.docx` for Grafana dashboard provisioning and ngrok configuration details.
+
 3. The build script will:
    - Check that Git and Docker are installed
    - Build all containers
