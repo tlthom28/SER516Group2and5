@@ -84,4 +84,11 @@ def get_commit_history(
         if start <= commit_date <= end:
             commits.append({"hash": sha, "date": date_str})
 
+    logger.info(
+        "Filtered %d commits in range %s..%s; sample=%s",
+        len(commits),
+        start_date,
+        end_date,
+        commits[:10],
+    )
     return commits

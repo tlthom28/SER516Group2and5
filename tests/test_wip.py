@@ -22,6 +22,7 @@ from src.metrics.wip import (
     _get_tasks,
     _get_task_history,
     calculate_kanban_wip,
+    _validate_metric_against_board,
 )
 
 
@@ -1230,3 +1231,43 @@ class TestTaigaFetchError:
     def test_exception_raise(self):
         with pytest.raises(TaigaFetchError):
             raise TaigaFetchError("Test")
+
+
+class TestWipValidationAgainstBoard:
+    def test_validation_fails_when_daily_total_exceeds_board_entities(self):
+        metric = WIPMetric(
+            project_id=1,
+            project_slug="demo",
+            sprint_id=1,
+            date_range_start="2026-01-01",
+            date_range_end="2026-01-01",
+            daily_wip=[DailyWIPMetric("2026-01-01", wip_count=2, backlog_count=0, done_count=0)],
+        )
+        entities = [{"id": 10, "status": 1, "created_date": "2026-01-01T00:00:00Z"}]
+        status_map = {1: {"name": "Backlog", "is_closed": False, "order": 1}}
+
+        with pytest.raises(TaigaFetchError, match="actual_total=2 expected_total=1"):
+            _validate_metric_against_board(metric, entities, status_map, min_order=1, entity_label="sprint 1")
+
+    def test_validation_passes_when_daily_total_matches_board_entities(self):
+        metric = WIPMetric(
+            project_id=1,
+            project_slug="demo",
+            sprint_id=1,
+            date_range_start="2026-01-01",
+            date_range_end="2026-01-02",
+            daily_wip=[
+                DailyWIPMetric("2026-01-01", wip_count=1, backlog_count=1, done_count=0),
+                DailyWIPMetric("2026-01-02", wip_count=0, backlog_count=1, done_count=1),
+            ],
+        )
+        entities = [
+            {"id": 10, "status": 2, "created_date": "2026-01-01T00:00:00Z"},
+            {"id": 11, "status": 1, "created_date": "2026-01-02T00:00:00Z"},
+        ]
+        status_map = {
+            1: {"name": "Backlog", "is_closed": False, "order": 1},
+            2: {"name": "In Progress", "is_closed": False, "order": 2},
+        }
+
+        _validate_metric_against_board(metric, entities, status_map, min_order=1, entity_label="sprint 1")

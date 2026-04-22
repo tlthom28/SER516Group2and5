@@ -164,3 +164,17 @@ class TestComputeDailyChurn:
         daily = compute_daily_churn(repo, "2030-01-01", "2030-12-31")
 
         assert daily == {}
+
+    def test_ignores_non_source_file_churn(self, tmp_path):
+        repo = str(tmp_path)
+        _init_dated_repo(repo)
+
+        _commit_dated(repo, "README.md", "doc line 1\n", "add docs", "2026-03-10T10:00:00")
+        _commit_dated(repo, "script.py", "print('hello')\n", "add code", "2026-03-11T10:00:00")
+
+        daily = compute_daily_churn(repo, "2026-03-10", "2026-03-11")
+
+        assert "2026-03-10" not in daily
+        assert daily["2026-03-11"]["added"] == 1
+        assert daily["2026-03-11"]["deleted"] == 0
+        assert daily["2026-03-11"]["total"] == 1

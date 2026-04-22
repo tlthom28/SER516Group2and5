@@ -575,7 +575,7 @@ async def compute_wip(request: Request):
 
             # Write WIP metrics to InfluxDB
             try:
-                influx_result = write_wip_metrics(response.dict())
+                influx_result = write_wip_metrics(response.model_dump())
                 if influx_result.success:
                     logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
                 else:
@@ -632,7 +632,7 @@ async def compute_wip(request: Request):
 
         # Write WIP metrics to InfluxDB
         try:
-            influx_result = write_wip_metrics(response.dict())
+            influx_result = write_wip_metrics(response.model_dump())
             if influx_result.success:
                 logger.info(f"WIP metrics written to InfluxDB: {influx_result.points_written} points")
             else:
@@ -1211,7 +1211,8 @@ async def compute_method_coverage(request: Request):
             
             public_cov = coverage_data.get("public", {}).get("coverage", 0.0)
             protected_cov = coverage_data.get("protected", {}).get("coverage", 0.0)
-            package_cov = coverage_data.get("package", {}).get("coverage", 0.0)
+            # Service groups package-private methods under "default".
+            package_cov = coverage_data.get("default", {}).get("coverage", 0.0)
             private_cov = coverage_data.get("private", {}).get("coverage", 0.0)
             
             # Write to InfluxDB
@@ -1429,6 +1430,7 @@ async def get_cycle_time_metrics(
 
             for transition in story.get("transitions", []):
                 to_status = transition.get("to_status")
+                from_status = transition.get("from_status")
                 timestamp = transition.get("timestamp")
                 if not to_status or not timestamp:
                     continue
@@ -1438,17 +1440,18 @@ async def get_cycle_time_metrics(
                 except ValueError:
                     continue
 
-                if start_date <= transition_dt.date() <= end_date:
-                    filtered_transitions.append(
-                        {
-                            "status": to_status,
-                            "timestamp": transition_dt.isoformat(),
-                        }
-                    )
+                filtered_transitions.append(
+                    {
+                        "status": to_status,
+                        "from_status": from_status,
+                        "timestamp": transition_dt.isoformat(),
+                    }
+                )
 
             stories_for_cycle_time.append(
                 {
                     "story_id": story.get("user_story_id"),
+                    "created_date": story.get("created_date", ""),
                     "transitions": filtered_transitions,
                 }
             )
@@ -1480,5 +1483,4 @@ async def get_cycle_time_metrics(
     except Exception as e:
         logger.error(f"Cycle time metrics computation failed: {e}")
         return JSONResponse(status_code=500, content={"detail": str(e)})
-
 

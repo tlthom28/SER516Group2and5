@@ -60,12 +60,39 @@ services:
       - ./monitoring/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - influxdb
+      - loki
+    networks:
+      - repopulse-net
+
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: repopulse-loki
+    # already no host port mapping
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    networks:
+      - repopulse-net
+
+  alloy:
+    image: grafana/alloy:v1.7.5
+    container_name: project-alloy
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
+    ports:
+      - "12345:12345"
+    depends_on:
+      - loki
     networks:
       - repopulse-net
 
 volumes:
   influxdb-data:
   grafana-data:
+  loki-data:
 
 networks:
   repopulse-net:

@@ -3,8 +3,14 @@ import os
 import subprocess
 
 from src.metrics.git_history import get_commit_history
+from src.metrics.loc import SUPPORTED_EXTENSIONS
 
 logger = logging.getLogger("repopulse.metrics.churn")
+
+
+def _supported_pathspecs() -> list[str]:
+    """Return git pathspecs that align churn with supported source files."""
+    return [f"*{ext}" for ext in sorted(SUPPORTED_EXTENSIONS)]
 
 
 def compute_repo_churn(repo_path: str, start_date: str, end_date: str) -> dict:
@@ -16,6 +22,13 @@ def compute_repo_churn(repo_path: str, start_date: str, end_date: str) -> dict:
 
     for commit in commits:
         churn = compute_commit_churn(repo_path, commit["hash"])
+        if churn["total"]:
+            logger.info(
+                "Non-zero repo churn commit: date=%s sha=%s churn=%s",
+                commit["date"],
+                commit["hash"][:8],
+                churn,
+            )
         logger.debug(f"Commit {commit['hash'][:8]}: +{churn['added']} -{churn['deleted']}")
         total_added += churn["added"]
         total_deleted += churn["deleted"]
@@ -41,6 +54,18 @@ def compute_daily_churn(repo_path: str, start_date: str, end_date: str) -> dict[
     for commit in commits:
         day = commit["date"]
         churn = compute_commit_churn(repo_path, commit["hash"])
+
+        # Skip commits that only touched non-source files so the daily
+        # output reflects code churn rather than repository-wide text churn.
+        if churn["total"] == 0:
+            continue
+
+        logger.info(
+            "Non-zero daily churn commit: bucket=%s sha=%s churn=%s",
+            day,
+            commit["hash"][:8],
+            churn,
+        )
 
         if day not in daily:
             daily[day] = {"added": 0, "deleted": 0, "modified": 0, "total": 0}
@@ -85,6 +110,8 @@ def _run_git_show(repo_path: str, sha: str) -> str:
         "--first-parent",
         "--format=",
         sha,
+        "--",
+        *_supported_pathspecs(),
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -125,4 +152,6 @@ def _parse_numstat(output: str) -> tuple[int, int]:
         added += a_val
         deleted += d_val
 
+    if added or deleted:
+        logger.info("Parsed numstat totals: added=%d deleted=%d", added, deleted)
     return added, deleted

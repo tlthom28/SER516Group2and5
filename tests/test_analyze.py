@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import tempfile
 from unittest.mock import MagicMock, patch
@@ -84,7 +85,7 @@ class TestAnalyzeEndpoint:
             mock_write_churn.assert_called_once()
 
         finally:
-            subprocess.run(["rm", "-rf", tmp_dir], check=True, capture_output=True)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     @patch("src.api.routes.write_daily_churn_metrics")
     @patch("src.api.routes.write_churn_metric")
@@ -118,7 +119,7 @@ class TestAnalyzeEndpoint:
             assert "churn" in data
 
         finally:
-            subprocess.run(["rm", "-rf", tmp_dir], check=True, capture_output=True)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def test_analyze_missing_repo_url(self):
         """POST /analyze with no repo_url should return 400."""
@@ -164,4 +165,4 @@ class TestAnalyzeEndpoint:
             assert "churn" in data
 
         finally:
-            subprocess.run(["rm", "-rf", tmp_dir], check=True, capture_output=True)
+            shutil.rmtree(tmp_dir, ignore_errors=True)

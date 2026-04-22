@@ -2,7 +2,7 @@ import os
 import tempfile
 import shutil
 import pytest
-from src.core.git_clone import GitRepoCloner, GitCloneError
+from src.core.git_clone import GitRepoCloner, GitCloneError, _history_fetch_since_date
 
 def test_clone_local_repo(tmp_path):
     #create a fake local git repo
@@ -47,3 +47,11 @@ def test_clone_valid_public_repo(monkeypatch):
     assert os.path.exists(cloned_path)
     assert os.path.isfile(os.path.join(cloned_path, "README.md"))
     cloner.cleanup()
+
+
+def test_history_fetch_since_date_uses_previous_day():
+    assert _history_fetch_since_date("2026-04-11") == "2026-04-10"
+
+
+def test_history_fetch_since_date_invalid_value_passthrough():
+    assert _history_fetch_since_date("not-a-date") == "not-a-date"

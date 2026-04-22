@@ -12,7 +12,7 @@ logger = logging.getLogger("repopulse.services.taiga_metrics")
 # US-122 / Task #127: Canonical cycle-time boundaries used by calculations.
 # Keep these definitions centralized to ensure all cycle-time computations
 # use the same start/end states.
-CYCLE_TIME_START_STATES = ("In Progress",)
+CYCLE_TIME_START_STATES = ("In Progress", "In progress", "New")
 CYCLE_TIME_END_STATES = ("Done",)
 
 
@@ -327,6 +327,7 @@ def get_transition_history(base_url, slug='', taiga_id=-1, sprint_id=None):
                 {
                     "user_story_id": int(user_story_id),
                     "user_story_name": story.get("subject", ""),
+                    "created_date": story.get("created_date", ""),
                     "transitions": transitions,
                 }
             )

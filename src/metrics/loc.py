@@ -352,10 +352,17 @@ def count_loc_in_directory(directory: str) -> ProjectLOC:
 
     project.modules = sorted(module_map.values(), key=lambda m: m.module)
 
+    # edited for more info with OTEL log
     logger.info(
-        f"LOC analysis: {project.total_files} files, "
-        f"{project.total_loc} LOC, {project.total_comment_lines} comment lines "
-        f"in {len(project.packages)} packages"
+        "LOC analysis complete",
+        extra={
+            "total_files": project.total_files,
+            "total_loc": project.total_loc,
+            "comment_lines": project.total_comment_lines,
+            "weighted_loc": project.total_weighted_loc,
+            "package_count": len(project.packages),
+            "project_root": project.project_root,
+        }
     )
 
     return project
