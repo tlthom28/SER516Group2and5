@@ -1019,11 +1019,10 @@ from src.services.taiga_metrics import (
     CYCLE_TIME_END_STATES,
     CYCLE_TIME_START_STATES,
     get_adopted_work as get_taiga_adopted_work_data,
+    get_found_work as get_taiga_found_work_data,
     get_transition_history as get_taiga_transition_history_data,
     parse_utc as parse_taiga_utc,
 )
-from src.services.taiga_metrics import get_adopted_work as get_taiga_adopted_work_data
-from src.services.taiga_metrics import get_transition_history as get_taiga_transition_history_data
 from src.services.cycle_time import compute_cycle_times, summarize_cycle_times
 import shutil
 
@@ -1269,25 +1268,42 @@ async def compute_taiga_metrics(request: Request):
                 content={"detail": "Missing 'slug' or 'taiga_id' parameter"}
             )
         
-        # Get Taiga data
+        # Get Taiga adopted work data
         taiga_data = get_taiga_adopted_work_data(base_url, slug, taiga_id)
-        
+
         if isinstance(taiga_data, dict) and taiga_data.get("status") == "error":
             return JSONResponse(
                 status_code=400,
                 content=taiga_data
             )
-        
+
+        # Get Taiga found work data (keyed by sprint_id for merge)
+        found_work_data = get_taiga_found_work_data(base_url, slug, taiga_id)
+        found_by_sprint: dict[int, int] = {}
+        if isinstance(found_work_data, dict) and found_work_data.get("status") == "success":
+            for fw_sprint in found_work_data.get("sprints", []):
+                found_by_sprint[fw_sprint.get("sprint_id", 0)] = fw_sprint.get("found_count", 0)
+
         sprints_result = []
         if "sprints" in taiga_data:
             for sprint in taiga_data["sprints"]:
+                sprint_id = sprint.get("sprint_id", 0)
+                found_count = found_by_sprint.get(sprint_id, 0)
                 sprints_result.append({
-                    "sprint_id": sprint.get("sprint_id", 0),
+                    "sprint_id": sprint_id,
                     "sprint_name": sprint.get("sprint_name", ""),
                     "adopted_work_count": sprint.get("adopted_count", 0),
+                    "found_work_count": found_count,
                     "created_stories": sprint.get("created_stories", 0),
                     "completed_stories": sprint.get("completed_stories", 0),
                 })
+                logger.info(
+                    "Taiga sprint metrics: sprint=%s sprint_id=%s adopted_work_count=%d found_work_count=%d",
+                    sprint.get("sprint_name", ""),
+                    sprint_id,
+                    sprint.get("adopted_count", 0),
+                    found_count,
+                )
 
         cycle_time_data = []
         transition_data = get_taiga_transition_history_data(base_url, slug, taiga_id)
@@ -1336,6 +1352,12 @@ async def compute_taiga_metrics(request: Request):
                 project_slug=slug or f"taiga_{taiga_id}",
                 sprints_data=sprints_result,
                 cycle_time_data=cycle_time_data,
+            )
+            logger.info(
+                "Taiga metrics written to InfluxDB: project=%s sprints=%d cycle_time_stories=%d",
+                slug or f"taiga_{taiga_id}",
+                len(sprints_result),
+                len(cycle_time_data),
             )
         except Exception as influx_err:
             logger.warning(f"Failed to write taiga metrics to InfluxDB: {influx_err}")
