@@ -794,6 +794,7 @@ def write_taiga_metrics(
                 .tag("sprint_id", str(sprint.get("sprint_id", "")))
                 .tag("sprint_name", sprint.get("sprint_name", ""))
                 .field("adopted_work_count", int(sprint.get("adopted_work_count", 0)))
+                .field("found_work_count", int(sprint.get("found_work_count", 0)))
                 .field("created_stories", int(sprint.get("created_stories", 0)))
                 .field("completed_stories", int(sprint.get("completed_stories", 0)))
             )

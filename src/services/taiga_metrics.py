@@ -2,8 +2,11 @@
 Taiga project metrics - Found Work and Adopted Work analysis.
 Integrates with Taiga API to extract sprint and user story data.
 """
+import logging
 import requests
 from datetime import datetime, timezone
+
+logger = logging.getLogger("repopulse.services.taiga_metrics")
 
 
 # US-122 / Task #127: Canonical cycle-time boundaries used by calculations.
@@ -172,10 +175,20 @@ def get_adopted_work(base_url, slug='', taiga_id=-1):
     project = get_structure(base_url, slug, taiga_id)
 
     if project is None or isinstance(project, str) or (isinstance(project, dict) and project.get("status") == "error"):
+        logger.error(
+            "Failed to fetch Taiga project structure: slug=%s taiga_id=%s error=%s",
+            slug, taiga_id, project,
+        )
         return {
             "status": "error",
             "message": project if isinstance(project, str) else "Could not fetch project from Taiga."
         }
+
+    logger.info(
+        "Fetched Taiga project structure: project=%s sprints=%d",
+        project.get("project_name", "unknown"),
+        len(project.get("project_sprints", [])),
+    )
 
     sprints_result = []
     for sprint in project["project_sprints"]:
@@ -196,6 +209,14 @@ def get_adopted_work(base_url, slug='', taiga_id=-1):
                     "created_date": raw_created,
                 }
                 adopted.append({key: story_dict[key] for key in us_order if key in story_dict})
+                logger.info(
+                    "Adopted story detected: sprint=%s story_id=%s story_name=%r created=%s sprint_start=%s",
+                    sprint["sprint_name"],
+                    story["user_story_id"],
+                    story["user_story_name"],
+                    raw_created,
+                    sprint["sprint_start"],
+                )
 
         sprint_dict = {
             "sprint_name": sprint["sprint_name"],
@@ -206,7 +227,17 @@ def get_adopted_work(base_url, slug='', taiga_id=-1):
             "adopted_stories": adopted,
         }
         sprints_result.append({key: sprint_dict[key] for key in sprint_order if key in sprint_dict})
+        logger.info(
+            "Sprint adopted work summary: sprint=%s sprint_id=%s adopted_count=%d",
+            sprint["sprint_name"],
+            sprint["sprint_id"],
+            len(adopted),
+        )
 
+    logger.info(
+        "Adopted work computation complete: slug=%s taiga_id=%s total_sprints=%d",
+        slug, taiga_id, len(sprints_result),
+    )
     return {
         "status": "success",
         "sprints": sprints_result,
@@ -322,3 +353,84 @@ def parse_utc(date):
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def get_found_work(base_url, slug='', taiga_id=-1):
+    """Calculate found work (stories created after sprint start that were not originally planned).
+    """
+    if base_url == '':
+        base_url = "https://api.taiga.io/api/v1"
+
+    us_order = ["user_story_name", "user_story_id", "created_date"]
+    sprint_order = ["sprint_name", "sprint_id", "sprint_start", "sprint_finish", "found_count", "found_stories"]
+
+    project = get_structure(base_url, slug, taiga_id)
+
+    if project is None or isinstance(project, str) or (isinstance(project, dict) and project.get("status") == "error"):
+        logger.error(
+            "Failed to fetch Taiga project structure for found work: slug=%s taiga_id=%s error=%s",
+            slug, taiga_id, project,
+        )
+        return {
+            "status": "error",
+            "message": project if isinstance(project, str) else "Could not fetch project from Taiga."
+        }
+
+    logger.info(
+        "Fetched Taiga project structure for found work: project=%s sprints=%d",
+        project.get("project_name", "unknown"),
+        len(project.get("project_sprints", [])),
+    )
+
+    sprints_result = []
+    for sprint in project["project_sprints"]:
+        sprint_start_dt = parse_utc(sprint["sprint_start"])
+        found = []
+
+        for story in sprint["sprint_user_stories"]:
+            raw_created = story.get("user_story_created_date", "")
+            created_dt = parse_utc(raw_created)
+
+            if created_dt is None or sprint_start_dt is None:
+                continue
+
+            if created_dt > sprint_start_dt:
+                story_dict = {
+                    "user_story_name": story["user_story_name"],
+                    "user_story_id": story["user_story_id"],
+                    "created_date": raw_created,
+                }
+                found.append({key: story_dict[key] for key in us_order if key in story_dict})
+                logger.info(
+                    "Found work story detected: sprint=%s story_id=%s story_name=%r created=%s sprint_start=%s",
+                    sprint["sprint_name"],
+                    story["user_story_id"],
+                    story["user_story_name"],
+                    raw_created,
+                    sprint["sprint_start"],
+                )
+
+        sprint_dict = {
+            "sprint_name": sprint["sprint_name"],
+            "sprint_id": sprint["sprint_id"],
+            "sprint_start": sprint["sprint_start"],
+            "sprint_finish": sprint["sprint_finish"],
+            "found_count": len(found),
+            "found_stories": found,
+        }
+        sprints_result.append({key: sprint_dict[key] for key in sprint_order if key in sprint_dict})
+        logger.info(
+            "Sprint found work summary: sprint=%s sprint_id=%s found_count=%d",
+            sprint["sprint_name"],
+            sprint["sprint_id"],
+            len(found),
+        )
+
+    logger.info(
+        "Found work computation complete: slug=%s taiga_id=%s total_sprints=%d",
+        slug, taiga_id, len(sprints_result),
+    )
+    return {
+        "status": "success",
+        "sprints": sprints_result,
+    }

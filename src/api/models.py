@@ -562,6 +562,7 @@ class TaigaSprint(BaseModel):
     sprint_id: int
     sprint_name: str
     adopted_work_count: int
+    found_work_count: int = 0
     created_stories: int
     completed_stories: int
 
