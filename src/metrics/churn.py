@@ -15,7 +15,14 @@ def _supported_pathspecs() -> list[str]:
 
 def compute_repo_churn(repo_path: str, start_date: str, end_date: str) -> dict:
     commits = get_commit_history(repo_path, start_date, end_date)
-    logger.info(f"Churn: found {len(commits)} commits between {start_date} and {end_date}")
+    logger.info("churn commit scan initiated",
+                extra={
+                    "repo_path": repo_path,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "commits_count": len(commits),
+                },
+                )
 
     total_added = 0
     total_deleted = 0
@@ -24,11 +31,19 @@ def compute_repo_churn(repo_path: str, start_date: str, end_date: str) -> dict:
         churn = compute_commit_churn(repo_path, commit["hash"])
         if churn["total"]:
             logger.info(
-                "Non-zero repo churn commit: date=%s sha=%s churn=%s",
-                commit["date"],
-                commit["hash"][:8],
-                churn,
+                "Non Zero repo churn commit",
+                extra={
+                "repo_path": repo_path,
+                "date": commit["date"],
+                "hash": commit["hash"][:5],
+                "added": churn["added"],
+                "deleted": churn["deleted"],
+                "modified": churn["modified"],
+                "total": churn["total"],
+                },
             )
+
+
         logger.debug(f"Commit {commit['hash'][:8]}: +{churn['added']} -{churn['deleted']}")
         total_added += churn["added"]
         total_deleted += churn["deleted"]
@@ -39,7 +54,18 @@ def compute_repo_churn(repo_path: str, start_date: str, end_date: str) -> dict:
         "modified": min(total_added, total_deleted),
         "total": total_added + total_deleted,
     }
-    logger.info(f"Churn totals: {result}")
+    logger.info("Repo churn computed",
+                extra = {
+                    "repo_path": repo_path,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "commits_count": len(commits),
+                    "added": result["added"],
+                    "deleted": result["deleted"],
+                    "modified": result["modified"],
+                    "total": result["total"],
+                },
+                )
     return result
 
 
@@ -61,10 +87,17 @@ def compute_daily_churn(repo_path: str, start_date: str, end_date: str) -> dict[
             continue
 
         logger.info(
-            "Non-zero daily churn commit: bucket=%s sha=%s churn=%s",
-            day,
-            commit["hash"][:8],
-            churn,
+            "Non-zero daily churn commit",
+            extra={
+                "repo_path": repo_path,
+                "bucket":day,
+                "hash": commit["hash"][:5],
+                "added": churn["added"],
+                "deleted": churn["deleted"],
+                "modified": churn["modified"],
+                "total": churn["total"],
+
+            },
         )
 
         if day not in daily:
@@ -153,5 +186,11 @@ def _parse_numstat(output: str) -> tuple[int, int]:
         deleted += d_val
 
     if added or deleted:
-        logger.info("Parsed numstat totals: added=%d deleted=%d", added, deleted)
+        logger.info("Parsed numstat totals",
+                    extra={
+                        "added": added,
+                        "deleted": deleted,
+                        "modified": min(added, deleted),
+                        "total": added + deleted,
+                    })
     return added, deleted
