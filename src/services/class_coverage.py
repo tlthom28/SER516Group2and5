@@ -2,9 +2,12 @@
 Class Comment Coverage analyzer for Java code.
 Measures the percentage of Java classes with JavaDoc comments.
 """
+import logging
 import os
 import re
 from pathlib import Path
+
+logger = logging.getLogger("repopulse.services.class_coverage")
 
 EXCLUDED_PATH_FRAGMENTS = ["test", "target", "out", "generated", "build"]
 EXCLUDED_FILE_SUFFIXES = ["Test.java", "Tests.java"]
@@ -46,6 +49,12 @@ def discover_java_files(repo_root: str) -> list:
             relative_path = os.path.relpath(full_path, repo_root).replace("\\", "/")
             if not _is_excluded(relative_path):
                 java_files.append(full_path)
+
+    logger.info(
+        "Discovered Java files for class coverage: repo_root=%s java_files=%d",
+        repo_root,
+        len(java_files),
+    )
     return java_files
 
 
@@ -57,6 +66,10 @@ def parse_java_file(file_path: str, repo_root: str) -> dict:
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
     except OSError:
+        logger.warning(
+            "Failed to read Java file for class coverage: file_path=%s",
+            relative_path,
+        )
         return {"file_path": relative_path, "package": "", "classes": [], "error": "Could not read file"}
 
     # Extract package name
@@ -201,8 +214,26 @@ def analyze_repo(
     commit_sha: str = "",
 ) -> dict:
     """Analyze repository-level class comment coverage."""
+    logger.info(
+        "Starting class coverage analysis: owner=%s repo=%s branch=%s commit_sha=%s",
+        repo_owner,
+        repo_name,
+        default_branch,
+        commit_sha or "unknown",
+    )
+
     java_files = discover_java_files(repo_root)
     file_results = [parse_java_file(fp, repo_root) for fp in java_files]
+
+    for fr in file_results:
+        file_class_count = len(fr.get("classes", []))
+        file_documented_count = sum(1 for c in fr.get("classes", []) if c.get("has_javadoc"))
+        logger.info(
+            "Class coverage file summary: file=%s classes=%d documented=%d",
+            fr.get("file_path", ""),
+            file_class_count,
+            file_documented_count,
+        )
 
     all_classes = [
         {**cls, "file_path": fr["file_path"], "package": fr["package"]}
@@ -213,6 +244,16 @@ def analyze_repo(
     total_classes = len(all_classes)
     classes_with_javadoc = sum(1 for c in all_classes if c["has_javadoc"])
     coverage_pct = round((classes_with_javadoc / total_classes * 100), 2) if total_classes > 0 else 0.0
+
+    logger.info(
+        "Class coverage analysis complete: owner=%s repo=%s files=%d total_classes=%d documented_classes=%d coverage_pct=%.2f",
+        repo_owner,
+        repo_name,
+        len(java_files),
+        total_classes,
+        classes_with_javadoc,
+        coverage_pct,
+    )
 
     return {
         "repository": {
