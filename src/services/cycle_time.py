@@ -10,13 +10,19 @@ logger = logging.getLogger(__name__)
 def compute_cycle_times(user_stories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     results = []
     logger.debug("Starting compute_cycle_times for %d stories", len(user_stories))
+    logger.info(
+        "Cycle time calculation started story_count=%s start_states=%s end_states=%s",
+        len(user_stories),
+        ",".join(CYCLE_TIME_START_STATES),
+        ",".join(CYCLE_TIME_END_STATES),
+    )
     for story in user_stories:
         story_id = story.get("story_id")
         transitions = story.get("transitions", [])
         logger.debug("Processing story_id=%s with %d transitions", story_id, len(transitions))
 
         if not transitions:
-            logger.info("No transitions for story_id=%s; setting cycle_time_hours=None", story_id)
+            logger.info("Cycle time skipped story_id=%s reason=no_transitions", story_id)
             results.append({"story_id": story_id, "cycle_time_hours": None})
             continue
 
@@ -61,7 +67,13 @@ def compute_cycle_times(user_stories: List[Dict[str, Any]]) -> List[Dict[str, An
                     break
 
         if not start_time or not end_time:
-            logger.info("Missing start or end time for story_id=%s (start=%s end=%s); setting None", story_id, start_time, end_time)
+            logger.info(
+                "Cycle time skipped story_id=%s reason=missing_boundary start=%s end=%s transitions=%s",
+                story_id,
+                start_time,
+                end_time,
+                len(transitions_sorted),
+            )
             results.append({"story_id": story_id, "cycle_time_hours": None})
             continue
 
@@ -78,12 +90,26 @@ def compute_cycle_times(user_stories: List[Dict[str, Any]]) -> List[Dict[str, An
             results.append({"story_id": story_id, "cycle_time_hours": None})
             continue
 
-        logger.info("Computed cycle_time_hours=%.2f for story_id=%s", cycle_time, story_id)
+        logger.info(
+            "Cycle time computed story_id=%s cycle_time_hours=%.2f transition_count=%s start=%s end=%s",
+            story_id,
+            cycle_time,
+            len(transitions_sorted),
+            start_time,
+            end_time,
+        )
         results.append({
             "story_id": story_id,
             "cycle_time_hours": cycle_time
         })
 
+    computed_count = sum(1 for result in results if result["cycle_time_hours"] is not None)
+    logger.info(
+        "Cycle time calculation finished story_count=%s computed_count=%s missing_count=%s",
+        len(results),
+        computed_count,
+        len(results) - computed_count,
+    )
     logger.debug("Finished compute_cycle_times; produced %d results", len(results))
     return results
 

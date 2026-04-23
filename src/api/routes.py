@@ -1398,6 +1398,14 @@ async def get_cycle_time_metrics(
 ):
     """Compute cycle-time metrics for Taiga user stories in a date range."""
     try:
+        logger.info(
+            "Cycle time request received slug=%s taiga_id=%s sprint_id=%s start=%s end=%s",
+            slug or "",
+            taiga_id,
+            sprint_id,
+            start,
+            end,
+        )
         try:
             start_date = datetime.strptime(start, "%Y-%m-%d").date()
             end_date = datetime.strptime(end, "%Y-%m-%d").date()
@@ -1425,6 +1433,7 @@ async def get_cycle_time_metrics(
             return JSONResponse(status_code=400, content=transition_history)
 
         stories_for_cycle_time = []
+        raw_story_count = len(transition_history.get("stories", []))
         for story in transition_history.get("stories", []):
             filtered_transitions = []
 
@@ -1456,8 +1465,27 @@ async def get_cycle_time_metrics(
                 }
             )
 
+        logger.info(
+            "Cycle time transition history loaded project_slug=%s project_id=%s sprint_id=%s raw_story_count=%s filtered_story_count=%s",
+            transition_history.get("project_slug", slug),
+            transition_history.get("project_id", taiga_id),
+            transition_history.get("sprint_id"),
+            raw_story_count,
+            len(stories_for_cycle_time),
+        )
         cycle_time_results = compute_cycle_times(stories_for_cycle_time)
         summary = summarize_cycle_times(cycle_time_results)
+        computed_count = sum(1 for result in cycle_time_results if result["cycle_time_hours"] is not None)
+        logger.info(
+            "Cycle time metrics calculated project_slug=%s story_count=%s computed_count=%s average=%s median=%s min=%s max=%s",
+            transition_history.get("project_slug", slug),
+            len(cycle_time_results),
+            computed_count,
+            summary["average"],
+            summary["median"],
+            summary["min"],
+            summary["max"],
+        )
        
         # writing cycle time metrics to InfluxDB
         try:
@@ -1483,4 +1511,3 @@ async def get_cycle_time_metrics(
     except Exception as e:
         logger.error(f"Cycle time metrics computation failed: {e}")
         return JSONResponse(status_code=500, content={"detail": str(e)})
-
