@@ -38,7 +38,7 @@ def extract_text(path: Path):
         raw = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         logger.warning(
-            "Failed to read file for fog index...",
+            "Failed to read file for fog index: file=%s",
             path.as_posix(),
         )
         return None, None
