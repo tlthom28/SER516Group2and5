@@ -1,6 +1,6 @@
 # RepoPulse API Guide
 
-The API runs at `http://localhost:8080/api`. All endpoints return JSON.
+The API runs at `http://localhost:8080`. All endpoints return JSON.
 
 ## Quick Access
 
@@ -20,7 +20,7 @@ No authentication required — all endpoints are public.
 
 **Curl:**
 ```bash
-curl http://localhost:8080/api/health
+curl http://localhost:8080/health
 ```
 
 **Response:**
@@ -34,7 +34,7 @@ curl http://localhost:8080/api/health
 
 **Curl:**
 ```bash
-curl http://localhost:8080/api/health/db
+curl http://localhost:8080/health/db
 ```
 
 **Response:**
@@ -61,14 +61,14 @@ Submit a repo to analyze. The job runs in the background.
 
 **Curl (with GitHub URL):**
 ```bash
-curl -X POST http://localhost:8080/api/jobs \
+curl -X POST http://localhost:8080/jobs \
   -H "Content-Type: application/json" \
   -d '{"repo_url": "https://github.com/owner/repo.git"}'
 ```
 
 **Curl (with local path):**
 ```bash
-curl -X POST http://localhost:8080/api/jobs \
+curl -X POST http://localhost:8080/jobs \
   -H "Content-Type: application/json" \
   -d '{"local_path": "/absolute/path/to/repo"}'
 ```
@@ -89,7 +89,7 @@ curl -X POST http://localhost:8080/api/jobs \
 
 **Curl:**
 ```bash
-curl http://localhost:8080/api/jobs/f47ac10b-58cc-4372-a567-0e02b2c3d479
+curl http://localhost:8080/jobs/f47ac10b-58cc-4372-a567-0e02b2c3d479
 ```
 
 **Response:**
@@ -112,7 +112,7 @@ curl http://localhost:8080/api/jobs/f47ac10b-58cc-4372-a567-0e02b2c3d479
 
 **Curl:**
 ```bash
-curl http://localhost:8080/api/jobs
+curl http://localhost:8080/jobs
 ```
 
 ---
@@ -121,7 +121,7 @@ curl http://localhost:8080/api/jobs
 
 **Curl:**
 ```bash
-curl http://localhost:8080/api/workers/health
+curl http://localhost:8080/workers/health
 ```
 
 **Response:**
@@ -145,7 +145,7 @@ curl http://localhost:8080/api/workers/health
 
 **Curl:**
 ```bash
-curl -X POST http://localhost:8080/api/metrics/loc \
+curl -X POST http://localhost:8080/metrics/loc \
   -H "Content-Type: application/json" \
   -d '{"repo_path": "/absolute/path/to/repo"}'
 ```
@@ -185,7 +185,7 @@ Returns a breakdown organized 3 ways: by package, by module, and by file.
 
 **Curl:**
 ```bash
-curl -X POST http://localhost:8080/api/analyze \
+curl -X POST http://localhost:8080/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "repo_url": "https://github.com/owner/repo.git",
@@ -297,7 +297,7 @@ To use Postman:
    - All endpoints will be available to test
 
 2. **Manual setup:**
-   - Base URL: `http://localhost:8080/api`
+  - Base URL: `http://localhost:8080`
    - All endpoints are in **Health & Status**, **Jobs**, and **Metrics** folders
    - No authentication headers required
 
@@ -322,7 +322,7 @@ These endpoints analyze code quality metrics from GitHub repositories and write 
 
 **Curl:**
 ```bash
-curl -X POST http://localhost:8080/api/metrics/fog-index \
+curl -X POST http://localhost:8080/metrics/fog-index \
   -H "Content-Type: application/json" \
   -d '{
     "user": "microsoft",
@@ -366,7 +366,7 @@ curl -X POST http://localhost:8080/api/metrics/fog-index \
 
 **Curl:**
 ```bash
-curl -X POST http://localhost:8080/api/metrics/class-coverage \
+curl -X POST http://localhost:8080/metrics/class-coverage \
   -H "Content-Type: application/json" \
   -d '{
     "user": "microsoft",
@@ -410,7 +410,7 @@ curl -X POST http://localhost:8080/api/metrics/class-coverage \
 
 **Curl:**
 ```bash
-curl -X POST http://localhost:8080/api/metrics/method-coverage \
+curl -X POST http://localhost:8080/metrics/method-coverage \
   -H "Content-Type: application/json" \
   -d '{
     "user": "microsoft",
@@ -454,7 +454,7 @@ curl -X POST http://localhost:8080/api/metrics/method-coverage \
 
 **Curl:**
 ```bash
-curl -X POST http://localhost:8080/api/metrics/taiga-metrics \
+curl -X POST http://localhost:8080/metrics/taiga-metrics \
   -H "Content-Type: application/json" \
   -d '{
     "base_url": "https://api.taiga.io",
