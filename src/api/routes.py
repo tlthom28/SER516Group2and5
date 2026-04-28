@@ -135,6 +135,7 @@ async def create_job(request: Request):
             job_id=job_id,
             repo_url=job_request.repo_url,
             local_path=job_request.local_path,
+            metrics=job_request.metrics,
         )
     except RuntimeError as e:
         return JSONResponse(status_code=503, content={"detail": str(e)})
@@ -146,6 +147,7 @@ async def create_job(request: Request):
         status=JobStatus.QUEUED,
         repo_url=job_request.repo_url,
         local_path=job_request.local_path,
+        metrics=job_request.metrics,
         created_at=created_at,
         message="Job queued for processing",
     )

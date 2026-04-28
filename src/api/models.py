@@ -24,6 +24,7 @@ class JobStatus(str, Enum):
 class JobRequest(BaseModel):
     repo_url: Optional[str] = Field(default=None)
     local_path: Optional[str] = Field(default=None)
+    metrics: list[str] = Field(default_factory=list)
 
     @field_validator("repo_url")
     @classmethod
@@ -67,6 +68,7 @@ class JobResponse(BaseModel):
     status: JobStatus
     repo_url: Optional[str] = None
     local_path: Optional[str] = None
+    metrics: list[str] = Field(default_factory=list)
     created_at: str
     message: str
 
@@ -78,6 +80,7 @@ class JobDetailResponse(BaseModel):
     progress: int = 0
     repo_url: Optional[str] = None
     local_path: Optional[str] = None
+    metrics: list[str] = Field(default_factory=list)
     created_at: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None

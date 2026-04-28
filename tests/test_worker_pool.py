@@ -4,6 +4,7 @@ import time
 import tempfile
 import shutil
 import threading
+from pathlib import Path
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -94,6 +95,60 @@ class TestWorkerPoolUnit:
             assert record.status == "completed"
             assert record.result["total_loc"] > 0
             mock_cloner.cleanup.assert_called_once()
+        finally:
+            pool.shutdown()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    @patch("src.worker.pool.write_method_coverage_metrics")
+    @patch("src.worker.pool.scan_method_coverage_repo")
+    @patch("src.worker.pool.write_fog_index_metrics")
+    @patch("src.worker.pool.analyze_fog_index_root")
+    @patch("src.worker.pool.GitRepoCloner")
+    def test_requested_code_quality_metrics_are_run(
+        self,
+        mock_cloner_cls,
+        mock_analyze_fog_index_root,
+        mock_write_fog_index_metrics,
+        mock_scan_method_coverage_repo,
+        mock_write_method_coverage_metrics,
+    ):
+        tmp = tempfile.mkdtemp(prefix="test_pool_metrics_")
+        _make_sample_tree(tmp)
+
+        mock_cloner = MagicMock()
+        mock_cloner.clone.return_value = tmp
+        mock_cloner.commit_hash = "abc123"
+        mock_cloner_cls.return_value = mock_cloner
+        mock_analyze_fog_index_root.return_value = [
+            (6.5, "medium", "comment", Path(tmp) / "app.py", "ok")
+        ]
+        mock_scan_method_coverage_repo.return_value = {
+            "public": {"coverage": 75.0},
+            "protected": {"coverage": None},
+            "default": {"coverage": 50.0},
+            "private": {"coverage": 25.0},
+        }
+
+        pool = WorkerPool(pool_size=1)
+        pool.start()
+        try:
+            record = pool.submit(
+                "job-metrics",
+                repo_url="https://github.com/owner/repo",
+                metrics=["fog_index", "method_coverage"],
+            )
+            record.future.result(timeout=10)
+
+            assert record.status == "completed"
+            assert "fog_index" in record.result
+            assert record.result["fog_index"]["summary"]["file_count"] == 1
+            assert "method_coverage" in record.result
+            assert record.result["method_coverage"]["public_coverage_percent"] == 75.0
+            assert record.result["method_coverage"]["protected_coverage_percent"] == 0.0
+            mock_analyze_fog_index_root.assert_called_once()
+            mock_write_fog_index_metrics.assert_called_once()
+            mock_scan_method_coverage_repo.assert_called_once()
+            mock_write_method_coverage_metrics.assert_called_once()
         finally:
             pool.shutdown()
             shutil.rmtree(tmp, ignore_errors=True)

@@ -6,11 +6,21 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, Future
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from src.core.git_clone import GitRepoCloner, GitCloneError
+from src.core.influx import (
+    batch_write_loc_metrics,
+    write_class_coverage_metrics,
+    write_fog_index_metrics,
+    write_method_coverage_metrics,
+)
 from src.metrics.loc import count_loc_in_directory
 from src.metrics.churn import compute_repo_churn, compute_daily_churn
+from src.services.class_coverage import analyze_repo as analyze_class_coverage_repo
+from src.services.fog_index import analyze_root as analyze_fog_index_root
+from src.services.method_coverage import scan_repo as scan_method_coverage_repo
 
 logger = logging.getLogger("repopulse.pool")
 
@@ -21,10 +31,11 @@ DEFAULT_POOL_SIZE = int(os.getenv("WORKER_POOL_SIZE", "4"))
 class JobRecord:
     """In-memory record for a single job."""
 
-    def __init__(self, job_id: str, repo_url: str = None, local_path: str = None):
+    def __init__(self, job_id: str, repo_url: str = None, local_path: str = None, metrics: Optional[list[str]] = None):
         self.job_id = job_id
         self.repo_url = repo_url
         self.local_path = local_path
+        self.metrics = metrics or []
         self.status = "queued"
         self.progress = 0
         self.created_at = datetime.now(timezone.utc).isoformat()
@@ -41,6 +52,7 @@ class JobRecord:
             "progress": self.progress,
             "repo_url": self.repo_url,
             "local_path": self.local_path,
+            "metrics": self.metrics,
             "created_at": self.created_at,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
@@ -79,12 +91,12 @@ class WorkerPool:
 
     # -- job submission --
 
-    def submit(self, job_id: str, repo_url: str = None, local_path: str = None) -> JobRecord:
+    def submit(self, job_id: str, repo_url: str = None, local_path: str = None, metrics: Optional[list[str]] = None) -> JobRecord:
         """Submit a new analysis job and return its record."""
         if self._executor is None:
             raise RuntimeError("Worker pool is not running")
 
-        record = JobRecord(job_id=job_id, repo_url=repo_url, local_path=local_path)
+        record = JobRecord(job_id=job_id, repo_url=repo_url, local_path=local_path, metrics=metrics)
         with self._lock:
             self._jobs[job_id] = record
 
@@ -141,6 +153,12 @@ class WorkerPool:
 
             record.progress = 50
 
+            repo_name = (record.repo_url or record.local_path or "unknown")
+            repo_name = repo_name.rstrip("/").rstrip(".git").split("/")[-1]
+            repo_url = record.repo_url or record.local_path or "unknown"
+            repo_owner = record.repo_url.split("/")[-2] if record.repo_url else "local"
+            commit_sha = cloner.commit_hash or ""
+
             # compute LOC
             project_loc = count_loc_in_directory(repo_path)
 
@@ -149,10 +167,6 @@ class WorkerPool:
 
             # write to influxdb (best-effort)
             try:
-                from src.core.influx import batch_write_loc_metrics
-
-                repo_name = (record.repo_url or record.local_path or "unknown")
-                repo_name = repo_name.rstrip("/").rstrip(".git").split("/")[-1]
                 collected_at = datetime.now(timezone.utc).isoformat()
 
                 # collect all metric dicts into one list
@@ -235,6 +249,107 @@ class WorkerPool:
                 "total_weighted_loc": project_loc.total_weighted_loc,
             }
 
+            for metric_name in record.metrics:
+                if metric_name == "fog_index":
+                    try:
+                        fog_results = analyze_fog_index_root(
+                            Path(repo_path),
+                            high_threshold=12.0,
+                            low_threshold=5.0,
+                            min_comment_words=10,
+                            min_words=30,
+                        )
+                        record.result["fog_index"] = {
+                            "files": [
+                                {
+                                    "score": row[0],
+                                    "status": row[1],
+                                    "kind": row[2],
+                                    "path": str(row[3]),
+                                    "message": row[4],
+                                }
+                                for row in fog_results
+                            ],
+                            "summary": {"file_count": len(fog_results)},
+                        }
+                        try:
+                            write_fog_index_metrics(repo_name, "HEAD", fog_results, commit_sha)
+                        except Exception as influx_err:
+                            logger.warning(f"[{record.job_id}] fog index InfluxDB write failed: {influx_err}")
+                    except Exception as fog_err:
+                        logger.warning(f"[{record.job_id}] fog index computation failed: {fog_err}")
+
+                elif metric_name == "class_coverage":
+                    try:
+                        coverage_data = analyze_class_coverage_repo(
+                            str(repo_path),
+                            repo_owner,
+                            repo_name,
+                            repo_url,
+                            "HEAD",
+                            commit_sha,
+                        )
+                        summary = coverage_data.get("summary", {})
+                        files_analyzed = coverage_data.get("files_analyzed", [])
+                        files_detail = [
+                            {
+                                "file_path": file_info.get("file_path", ""),
+                                "total_classes": file_info.get("total_classes", 0),
+                                "documented_classes": file_info.get("classes_with_javadoc", 0),
+                                "coverage_percent": file_info.get("coverage_pct", 0.0),
+                            }
+                            for file_info in files_analyzed
+                        ]
+                        record.result["class_coverage"] = {
+                            "total_java_files": summary.get("total_java_files_analyzed", 0),
+                            "total_classes": summary.get("total_classes_found", 0),
+                            "documented_classes": summary.get("classes_with_javadoc", 0),
+                            "overall_coverage_percent": summary.get("coverage_pct", 0.0),
+                            "files": files_detail,
+                        }
+                        try:
+                            write_class_coverage_metrics(
+                                repo_name,
+                                "HEAD",
+                                summary.get("total_classes_found", 0),
+                                summary.get("classes_with_javadoc", 0),
+                                summary.get("coverage_pct", 0.0),
+                                commit_sha,
+                                files_detail,
+                            )
+                        except Exception as influx_err:
+                            logger.warning(f"[{record.job_id}] class coverage InfluxDB write failed: {influx_err}")
+                    except Exception as class_cov_err:
+                        logger.warning(f"[{record.job_id}] class coverage computation failed: {class_cov_err}")
+
+                elif metric_name == "method_coverage":
+                    try:
+                        coverage_data = scan_method_coverage_repo(Path(repo_path))
+                        public_cov = coverage_data.get("public", {}).get("coverage") or 0.0
+                        protected_cov = coverage_data.get("protected", {}).get("coverage") or 0.0
+                        package_cov = coverage_data.get("default", {}).get("coverage") or 0.0
+                        private_cov = coverage_data.get("private", {}).get("coverage") or 0.0
+                        record.result["method_coverage"] = {
+                            "public_coverage_percent": public_cov,
+                            "protected_coverage_percent": protected_cov,
+                            "package_coverage_percent": package_cov,
+                            "private_coverage_percent": private_cov,
+                        }
+                        try:
+                            write_method_coverage_metrics(
+                                repo_name,
+                                "HEAD",
+                                public_cov,
+                                protected_cov,
+                                package_cov,
+                                private_cov,
+                                commit_sha,
+                            )
+                        except Exception as influx_err:
+                            logger.warning(f"[{record.job_id}] method coverage InfluxDB write failed: {influx_err}")
+                    except Exception as method_cov_err:
+                        logger.warning(f"[{record.job_id}] method coverage computation failed: {method_cov_err}")
+
             # compute churn (best-effort; requires a .git directory)
             try:
                 churn = compute_repo_churn(repo_path, "1970-01-01", "2100-01-01")
@@ -244,7 +359,6 @@ class WorkerPool:
                 try:
                     from src.core.influx import write_churn_metric, write_daily_churn_metrics
 
-                    repo_url = record.repo_url or record.local_path or "unknown"
                     write_churn_metric(repo_url, "1970-01-01", "2100-01-01", churn)
 
                     daily_churn = compute_daily_churn(repo_path, "1970-01-01", "2100-01-01")
