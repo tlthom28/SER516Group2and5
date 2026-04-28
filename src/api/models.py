@@ -11,6 +11,8 @@ GITHUB_URL_PATTERN = re.compile(
     r"^https?://github\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(\.git)?/?$"
 )
 
+ALLOWED_METRICS = {"fog_index", "class_coverage", "method_coverage"}
+
 
 class JobStatus(str, Enum):
     QUEUED = "queued"
@@ -24,6 +26,19 @@ class JobStatus(str, Enum):
 class JobRequest(BaseModel):
     repo_url: Optional[str] = Field(default=None)
     local_path: Optional[str] = Field(default=None)
+    metrics: Optional[list[str]] = Field(default=None)
+
+    @field_validator("metrics")
+    @classmethod
+    def validate_metrics(cls, v):
+        if v is not None:
+            unknown = set(v) - ALLOWED_METRICS
+            if unknown:
+                raise ValueError(
+                    f"Unknown metric(s): {sorted(unknown)}. "
+                    f"Allowed values: {sorted(ALLOWED_METRICS)}"
+                )
+        return v
 
     @field_validator("repo_url")
     @classmethod
@@ -78,6 +93,7 @@ class JobDetailResponse(BaseModel):
     progress: int = 0
     repo_url: Optional[str] = None
     local_path: Optional[str] = None
+    metrics: Optional[list[str]] = None
     created_at: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
