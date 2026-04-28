@@ -121,7 +121,7 @@ docker compose up -d
 
 Check if the API is running:
 ```bash
-curl http://localhost:8080/api/health
+curl http://localhost:8080/health
 ```
 
 Expected response:
@@ -133,7 +133,7 @@ Expected response:
 
 Check if InfluxDB is connected:
 ```bash
-curl http://localhost:8080/api/health/db
+curl http://localhost:8080/health/db
 ```
 
 Expected response:
@@ -145,7 +145,7 @@ Expected response:
 
 Check worker status:
 ```bash
-curl http://localhost:8080/api/workers/health
+curl http://localhost:8080/workers/health
 ```
 
 Expected response:
@@ -293,7 +293,7 @@ docker compose logs influxdb
 
 ```bash
 # Check worker pool status
-curl http://localhost:8080/api/workers/health
+curl http://localhost:8080/workers/health
 
 # Check if worker is stuck
 docker compose logs api | grep -i "timeout\|error"
@@ -413,7 +413,7 @@ INFLUX_RETENTION_DAYS=30  # Keep 30 days of metrics
 
 - Monitor logs for errors: `docker compose logs | grep -i error`
 - Check disk space: `df -h`
-- Verify API is responding: `curl http://localhost:8080/api/health`
+- Verify API is responding: `curl http://localhost:8080/health`
 
 ### Weekly
 
