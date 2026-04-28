@@ -93,7 +93,7 @@ class JobDetailResponse(BaseModel):
     progress: int = 0
     repo_url: Optional[str] = None
     local_path: Optional[str] = None
-    metrics: Optional[list[str]] = None
+    metrics: Optional[list[str]] = None # List of metrics being computed, if known
     created_at: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
