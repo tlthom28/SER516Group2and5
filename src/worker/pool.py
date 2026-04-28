@@ -21,10 +21,11 @@ DEFAULT_POOL_SIZE = int(os.getenv("WORKER_POOL_SIZE", "4"))
 class JobRecord:
     """In-memory record for a single job."""
 
-    def __init__(self, job_id: str, repo_url: str = None, local_path: str = None):
+    def __init__(self, job_id: str, repo_url: str = None, local_path: str = None, metrics: list = None):
         self.job_id = job_id
         self.repo_url = repo_url
         self.local_path = local_path
+        self.metrics = metrics or []
         self.status = "queued"
         self.progress = 0
         self.created_at = datetime.now(timezone.utc).isoformat()
@@ -41,6 +42,7 @@ class JobRecord:
             "progress": self.progress,
             "repo_url": self.repo_url,
             "local_path": self.local_path,
+            "metrics": self.metrics,
             "created_at": self.created_at,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
@@ -79,12 +81,12 @@ class WorkerPool:
 
     # -- job submission --
 
-    def submit(self, job_id: str, repo_url: str = None, local_path: str = None) -> JobRecord:
+    def submit(self, job_id: str, repo_url: str = None, local_path: str = None, metrics: list = None) -> JobRecord:
         """Submit a new analysis job and return its record."""
         if self._executor is None:
             raise RuntimeError("Worker pool is not running")
 
-        record = JobRecord(job_id=job_id, repo_url=repo_url, local_path=local_path)
+        record = JobRecord(job_id=job_id, repo_url=repo_url, local_path=local_path, metrics=metrics)
         with self._lock:
             self._jobs[job_id] = record
 
