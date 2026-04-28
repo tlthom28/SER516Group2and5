@@ -2,8 +2,11 @@
 Method Comment Coverage analyzer for Java code.
 Measures the percentage of Java methods with JavaDoc comments by visibility level.
 """
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger("repopulse.services.method_coverage")
 
 CODE_FILE = {".java"}
 IGNORE_DIRECTORY = {".git", "target", "build", ".idea", ".gradle"}
@@ -125,6 +128,10 @@ def coverage(methods):
 
 def scan_repo(repo_root: Path):
     """Scan a repository and aggregate method comment coverage by visibility."""
+    logger.info(
+        "Starting method coverage analysis: root=%s",
+        Path(repo_root).as_posix(),
+    )
     grouped = {
         "all": {"documented": 0, "total": 0},
         "public": {"documented": 0, "total": 0},
@@ -133,13 +140,39 @@ def scan_repo(repo_root: Path):
         "default": {"documented": 0, "total": 0},
     }
 
-    for path in iterate_java_files(repo_root):
+    java_files = list(iterate_java_files(repo_root))
+    logger.info(
+        "Discovered Java files for method coverage: java_files=%d",
+        len(java_files),
+    )
+
+    for path in java_files:
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
+            try:
+                display_path = path.relative_to(repo_root).as_posix()
+            except ValueError:
+                display_path = path.as_posix()
+            logger.warning(
+                "Failed to read Java file for method coverage: file_path=%s",
+                display_path,
+            )
             continue
 
         methods = extract_java_methods(text)
+        file_cov_all, file_doc_all, file_total_all = coverage(methods)
+        try:
+            display_path = path.relative_to(repo_root).as_posix()
+        except ValueError:
+            display_path = path.as_posix()
+        logger.info(
+            "Method coverage file summary: file=%s methods_total=%d documented=%d coverage_pct=%s",
+            display_path,
+            file_total_all,
+            file_doc_all,
+            "n/a" if file_cov_all is None else f"{file_cov_all:.2f}",
+        )
         _, doc_all, total_all = coverage(methods)
         grouped["all"]["documented"] += doc_all
         grouped["all"]["total"] += total_all
@@ -166,5 +199,18 @@ def scan_repo(repo_root: Path):
             "threshold": threshold,
             "below_threshold": 1 if (cov is not None and cov < threshold) else 0,
         }
+
+    overall_cov = out["all"]["coverage"]
+    logger.info(
+        "Method coverage analysis complete: files=%d total_methods=%d documented_methods=%d coverage_pct=%s public_pct=%s protected_pct=%s default_pct=%s private_pct=%s",
+        len(java_files),
+        out["all"]["total"],
+        out["all"]["documented"],
+        "n/a" if overall_cov is None else f"{overall_cov:.2f}",
+        "n/a" if out["public"]["coverage"] is None else f"{out['public']['coverage']:.2f}",
+        "n/a" if out["protected"]["coverage"] is None else f"{out['protected']['coverage']:.2f}",
+        "n/a" if out["default"]["coverage"] is None else f"{out['default']['coverage']:.2f}",
+        "n/a" if out["private"]["coverage"] is None else f"{out['private']['coverage']:.2f}",
+    )
 
     return out
