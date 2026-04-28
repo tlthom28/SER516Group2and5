@@ -55,7 +55,7 @@ CHURN_MEMORY_BASELINE_MB = 256.0    # max peak memory (MB)
 # Synthetic file-count / commit-count knobs
 # ──────────────────────────────────────────────────────────────────────
 LOC_FILE_COUNT = 10_000     # AC-1: ≥ 10 000 files
-CHURN_COMMIT_COUNT = 1_000  # AC-2: ≥ 1 000 commits
+CHURN_COMMIT_COUNT = int(os.getenv("CHURN_COMMIT_COUNT", "1000")) # AC-2: ≥ 1 000 commits on local, 200 on CI
 
 # File distribution across languages
 LOC_JAVA_RATIO = 0.50
