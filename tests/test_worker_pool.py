@@ -21,7 +21,8 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def _no_influx_writes():
     with patch("src.core.influx.write_loc_metric"), \
-         patch("src.core.influx.batch_write_loc_metrics"):
+         patch("src.core.influx.batch_write_loc_metrics"), \
+         patch("src.core.influx.write_timeseries_snapshot"):
         yield
 
 
@@ -95,6 +96,56 @@ class TestWorkerPoolUnit:
             assert record.status == "completed"
             assert record.result["total_loc"] > 0
             mock_cloner.cleanup.assert_called_once()
+        finally:
+            pool.shutdown()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    @patch("src.worker.pool.write_timeseries_snapshot")
+    @patch("src.worker.pool.GitRepoCloner")
+    def test_loc_timeseries_snapshot_written_when_commit_present(
+        self,
+        mock_cloner_cls,
+        mock_write_snapshot,
+    ):
+        """LOC jobs with a commit hash should write time-series snapshots."""
+        tmp = tempfile.mkdtemp(prefix="test_pool_snapshot_")
+        _make_sample_tree(tmp)
+
+        mock_cloner = MagicMock()
+        mock_cloner.clone.return_value = tmp
+        mock_cloner.commit_hash = "abc123"
+        mock_cloner_cls.return_value = mock_cloner
+
+        pool = WorkerPool(pool_size=1)
+        pool.start()
+        try:
+            record = pool.submit("job-snapshot", repo_url="https://github.com/owner/repo")
+            record.future.result(timeout=10)
+
+            assert record.status == "completed"
+            assert mock_write_snapshot.call_count >= 1
+            assert any(
+                call.args[0].get("granularity") == "project"
+                for call in mock_write_snapshot.call_args_list
+            )
+        finally:
+            pool.shutdown()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    @patch("src.worker.pool.write_timeseries_snapshot")
+    def test_loc_timeseries_snapshot_skipped_for_local_path(self, mock_write_snapshot):
+        """Local-path jobs without commit hash should skip snapshot writes."""
+        tmp = tempfile.mkdtemp(prefix="test_pool_local_")
+        _make_sample_tree(tmp)
+
+        pool = WorkerPool(pool_size=1)
+        pool.start()
+        try:
+            record = pool.submit("job-local", local_path=tmp)
+            record.future.result(timeout=10)
+
+            assert record.status == "completed"
+            assert mock_write_snapshot.call_count == 0
         finally:
             pool.shutdown()
             shutil.rmtree(tmp, ignore_errors=True)
