@@ -82,6 +82,7 @@ class JobResponse(BaseModel):
     status: JobStatus
     repo_url: Optional[str] = None
     local_path: Optional[str] = None
+    metrics: Optional[list[str]] = None
     created_at: str
     message: str
 

@@ -39,6 +39,7 @@ def test_create_job_with_repo_url():
     assert data["status"] == "queued"
     assert data["repo_url"] == "https://github.com/kperam1/RepoPulse"
     assert data["local_path"] is None
+    assert data["metrics"] is None
     assert data["message"] == "Job queued for processing"
     assert "job_id" in data
     assert "created_at" in data
@@ -54,7 +55,21 @@ def test_create_job_with_local_path():
     assert data["status"] == "queued"
     assert data["local_path"] == "/home/user/projects/my-repo"
     assert data["repo_url"] is None
+    assert data["metrics"] is None
     assert data["message"] == "Job queued for processing"
+
+
+def test_create_job_with_requested_metrics():
+    response = client.post(
+        "/jobs",
+        json={
+            "repo_url": "https://github.com/kperam1/RepoPulse",
+            "metrics": ["fog_index", "method_coverage"],
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["metrics"] == ["fog_index", "method_coverage"]
 
 
 def test_create_job_missing_fields():
@@ -176,4 +191,3 @@ def test_openapi_docs_available():
     assert data["info"]["title"] == "RepoPulse API"
     assert "/health" in data["paths"]
     assert "/jobs" in data["paths"]
-
