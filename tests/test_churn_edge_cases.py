@@ -132,3 +132,25 @@ class TestMergeCommitSafe:
         assert isinstance(churn["deleted"], int) and churn["deleted"] >= 0
         assert isinstance(churn["modified"], int) and churn["modified"] >= 0
         assert isinstance(churn["total"], int) and churn["total"] >= 0
+
+    def test_merge_commit_uses_first_parent_diff(self, tmp_path):
+        repo = str(tmp_path)
+        _init_repo(repo)
+        default_branch = _run(["git", "branch", "--show-current"], cwd=repo)
+
+        _commit_file(repo, "shared.py", "base\n", "2026-05-01T10:00:00+00:00")
+
+        _run(["git", "checkout", "-b", "feature"], cwd=repo)
+        _commit_file(repo, "feature.py", "feature work\n", "2026-05-02T10:00:00+00:00")
+
+        _run(["git", "checkout", default_branch], cwd=repo)
+        _commit_file(repo, "main_work.py", "main work\n", "2026-05-03T10:00:00+00:00")
+        _run(["git", "merge", "--no-ff", "feature", "-m", "merge feature"], cwd=repo)
+
+        merge_sha = _get_head_sha(repo)
+        churn = compute_commit_churn(repo, merge_sha)
+
+        assert churn["added"] == 1
+        assert churn["deleted"] == 0
+        assert churn["modified"] == 0
+        assert churn["total"] == 1
