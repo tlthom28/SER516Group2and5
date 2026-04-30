@@ -136,6 +136,8 @@ async def create_job(request: Request):
             repo_url=job_request.repo_url,
             local_path=job_request.local_path,
             metrics=job_request.metrics,
+            start_date=job_request.start_date,
+            end_date=job_request.end_date,
         )
     except RuntimeError as e:
         return JSONResponse(status_code=503, content={"detail": str(e)})
@@ -148,6 +150,8 @@ async def create_job(request: Request):
         repo_url=job_request.repo_url,
         local_path=job_request.local_path,
         metrics=job_request.metrics,
+        start_date=job_request.start_date,
+        end_date=job_request.end_date,
         created_at=created_at,
         message="Job queued for processing",
     )

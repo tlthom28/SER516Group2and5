@@ -72,6 +72,21 @@ def test_create_job_with_requested_metrics():
     assert data["metrics"] == ["fog_index", "method_coverage"]
 
 
+def test_create_job_with_requested_dates():
+    response = client.post(
+        "/jobs",
+        json={
+            "repo_url": "https://github.com/kperam1/RepoPulse",
+            "start_date": "2026-03-01",
+            "end_date": "2026-03-31",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["start_date"] == "2026-03-01"
+    assert data["end_date"] == "2026-03-31"
+
+
 def test_create_job_missing_fields():
     response = client.post("/jobs", json={})
     assert response.status_code == 400
