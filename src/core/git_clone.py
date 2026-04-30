@@ -135,16 +135,17 @@ class GitRepoCloner:
 
 
 def _history_fetch_since_date(since_date: str) -> str:
-    """Fetch one extra day of history so boundary commits have parents.
+    """Fetch extra history so in-range commits have parents available.
 
-    Churn uses ``git show --numstat`` per commit. With a shallow clone fetched
-    starting exactly at the requested date, the first in-range commit may be a
-    shallow boundary whose parent is missing, causing Git to report the entire
-    file contents as additions. Pulling one extra day of history keeps the diff
-    for the boundary commit anchored to its real parent in common cases.
+    Churn diffs each commit against its first parent. With a shallow clone fetched
+    starting exactly at the requested date, the first in-range commit may still
+    be a shallow boundary whose parent is missing, causing Git to report the
+    entire file contents as additions when diffed indirectly. Pulling a wider
+    buffer of history keeps the first in-range commit anchored to its real parent
+    in common low-activity repositories.
     """
     try:
         parsed = date.fromisoformat(since_date)
     except ValueError:
         return since_date
-    return (parsed - timedelta(days=1)).isoformat()
+    return (parsed - timedelta(days=30)).isoformat()

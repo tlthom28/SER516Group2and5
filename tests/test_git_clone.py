@@ -49,8 +49,8 @@ def test_clone_valid_public_repo(monkeypatch):
     cloner.cleanup()
 
 
-def test_history_fetch_since_date_uses_previous_day():
-    assert _history_fetch_since_date("2026-04-11") == "2026-04-10"
+def test_history_fetch_since_date_uses_buffer_window():
+    assert _history_fetch_since_date("2026-04-11") == "2026-03-12"
 
 
 def test_history_fetch_since_date_invalid_value_passthrough():
