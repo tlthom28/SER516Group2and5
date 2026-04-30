@@ -15,6 +15,7 @@ from src.core.influx import (
     write_class_coverage_metrics,
     write_fog_index_metrics,
     write_method_coverage_metrics,
+    write_timeseries_snapshot,
 )
 from src.metrics.loc import count_loc_in_directory
 from src.metrics.churn import compute_repo_churn, compute_daily_churn
@@ -187,7 +188,8 @@ class WorkerPool:
             repo_name = repo_name.rstrip("/").rstrip(".git").split("/")[-1]
             repo_url = record.repo_url or record.local_path or "unknown"
             repo_owner = record.repo_url.split("/")[-2] if record.repo_url else "local"
-            commit_sha = cloner.commit_hash or ""
+            commit_hash = cloner.commit_hash
+            commit_sha = commit_hash or ""
 
             # compute LOC
             project_loc = count_loc_in_directory(repo_path)
@@ -269,6 +271,70 @@ class WorkerPool:
                         f"{write_result.points_written} written, {write_result.points_failed} failed "
                         f"after {write_result.retries_used} retries"
                     )
+
+                if commit_hash is None:
+                    logger.warning(
+                        f"[{record.job_id}] commit hash missing; skipping timeseries_snapshot writes"
+                    )
+                else:
+                    try:
+                        snapshot_base = {
+                            "repo_id": record.repo_url or record.local_path,
+                            "repo_name": repo_name,
+                            "branch": "HEAD",
+                            "commit_hash": commit_hash,
+                            "snapshot_timestamp": collected_at,
+                            "snapshot_type": "loc",
+                        }
+
+                        write_timeseries_snapshot({
+                            **snapshot_base,
+                            "granularity": "project",
+                            "project_name": repo_name,
+                            "language": "mixed",
+                            "metrics": {
+                                "total_loc": project_loc.total_loc,
+                                "code_loc": project_loc.total_loc,
+                                "comment_loc": project_loc.total_comment_lines,
+                                "blank_loc": project_loc.total_blank_lines,
+                            },
+                        })
+
+                        lang_map = {".py": "python", ".java": "java", ".ts": "typescript"}
+                        for f in project_loc.files:
+                            ext = os.path.splitext(f.path)[1].lower()
+                            write_timeseries_snapshot({
+                                **snapshot_base,
+                                "granularity": "file",
+                                "project_name": repo_name,
+                                "file_path": f.path,
+                                "language": lang_map.get(ext, "unknown"),
+                                "metrics": {
+                                    "total_loc": f.loc,
+                                    "code_loc": f.loc,
+                                    "comment_loc": f.comment_lines,
+                                    "blank_loc": f.blank_lines,
+                                },
+                            })
+
+                        for pkg in project_loc.packages:
+                            write_timeseries_snapshot({
+                                **snapshot_base,
+                                "granularity": "package",
+                                "project_name": repo_name,
+                                "package_name": pkg.package,
+                                "language": "mixed",
+                                "metrics": {
+                                    "total_loc": pkg.loc,
+                                    "code_loc": pkg.loc,
+                                    "comment_loc": pkg.comment_lines,
+                                    "blank_loc": 0,
+                                },
+                            })
+                    except Exception as snapshot_err:
+                        logger.warning(
+                            f"[{record.job_id}] timeseries_snapshot write failed: {snapshot_err}"
+                        )
             except Exception as influx_err:
                 logger.warning(f"[{record.job_id}] InfluxDB write failed: {influx_err}")
 
