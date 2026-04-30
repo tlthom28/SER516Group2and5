@@ -5,7 +5,7 @@ import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, Future
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -32,11 +32,21 @@ DEFAULT_POOL_SIZE = int(os.getenv("WORKER_POOL_SIZE", "4"))
 class JobRecord:
     """In-memory record for a single job."""
 
-    def __init__(self, job_id: str, repo_url: str = None, local_path: str = None, metrics: list = None):
+    def __init__(
+        self,
+        job_id: str,
+        repo_url: str = None,
+        local_path: str = None,
+        metrics: list = None,
+        start_date: str = None,
+        end_date: str = None,
+    ):
         self.job_id = job_id
         self.repo_url = repo_url
         self.local_path = local_path
         self.metrics = metrics or []
+        self.start_date = start_date
+        self.end_date = end_date
         self.status = "queued"
         self.progress = 0
         self.created_at = datetime.now(timezone.utc).isoformat()
@@ -54,6 +64,8 @@ class JobRecord:
             "repo_url": self.repo_url,
             "local_path": self.local_path,
             "metrics": self.metrics,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
             "created_at": self.created_at,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
@@ -92,12 +104,27 @@ class WorkerPool:
 
     # -- job submission --
 
-    def submit(self, job_id: str, repo_url: str = None, local_path: str = None, metrics: list = None) -> JobRecord:
+    def submit(
+        self,
+        job_id: str,
+        repo_url: str = None,
+        local_path: str = None,
+        metrics: list = None,
+        start_date: str = None,
+        end_date: str = None,
+    ) -> JobRecord:
         """Submit a new analysis job and return its record."""
         if self._executor is None:
             raise RuntimeError("Worker pool is not running")
 
-        record = JobRecord(job_id=job_id, repo_url=repo_url, local_path=local_path, metrics=metrics)
+        record = JobRecord(
+            job_id=job_id,
+            repo_url=repo_url,
+            local_path=local_path,
+            metrics=metrics,
+            start_date=start_date,
+            end_date=end_date,
+        )
         with self._lock:
             self._jobs[job_id] = record
 
@@ -143,10 +170,14 @@ class WorkerPool:
 
         cloner = GitRepoCloner()
         try:
+            today = datetime.now(timezone.utc).date()
+            end_date = record.end_date or today.isoformat()
+            start_date = record.start_date or (today - timedelta(days=7)).isoformat()
             # figure out what to analyze
             if record.repo_url:
                 record.progress = 25
                 repo_path = cloner.clone(record.repo_url, shallow=True)
+                cloner.deepen_since(repo_path, start_date)
             elif record.local_path:
                 repo_path = record.local_path
             else:
@@ -421,7 +452,7 @@ class WorkerPool:
 
             # compute churn (best-effort; requires a .git directory)
             try:
-                churn = compute_repo_churn(repo_path, "1970-01-01", "2100-01-01")
+                churn = compute_repo_churn(repo_path, start_date, end_date)
                 record.result["churn"] = churn
 
                 # write churn metrics to InfluxDB
@@ -429,9 +460,9 @@ class WorkerPool:
                     from src.core.influx import write_churn_metric, write_daily_churn_metrics
 
                     repo_url = record.repo_url or record.local_path or "unknown"
-                    write_churn_metric(repo_url, "1970-01-01", "2100-01-01", churn)
+                    write_churn_metric(repo_url, start_date, end_date, churn)
 
-                    daily_churn = compute_daily_churn(repo_path, "1970-01-01", "2100-01-01")
+                    daily_churn = compute_daily_churn(repo_path, start_date, end_date)
                     if daily_churn:
                         write_daily_churn_metrics(repo_url, daily_churn)
                     logger.info(f"[{record.job_id}] wrote churn metrics to InfluxDB")

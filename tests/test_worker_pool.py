@@ -150,6 +150,37 @@ class TestWorkerPoolUnit:
             pool.shutdown()
             shutil.rmtree(tmp, ignore_errors=True)
 
+    @patch("src.worker.pool.compute_daily_churn", return_value={})
+    @patch("src.worker.pool.compute_repo_churn", return_value={"added": 1, "deleted": 2, "modified": 1, "total": 3})
+    @patch("src.worker.pool.GitRepoCloner")
+    def test_job_clone_deepens_history_for_requested_dates(self, mock_cloner_cls, _mock_repo_churn, _mock_daily_churn):
+        tmp = tempfile.mkdtemp(prefix="test_pool_dates_")
+        _make_sample_tree(tmp)
+
+        mock_cloner = MagicMock()
+        mock_cloner.clone.return_value = tmp
+        mock_cloner_cls.return_value = mock_cloner
+
+        pool = WorkerPool(pool_size=1)
+        pool.start()
+        try:
+            record = pool.submit(
+                "job-dates",
+                repo_url="https://github.com/owner/repo",
+                start_date="2026-03-01",
+                end_date="2026-03-31",
+            )
+            record.future.result(timeout=10)
+
+            assert record.status == "completed"
+            assert record.start_date == "2026-03-01"
+            assert record.end_date == "2026-03-31"
+            mock_cloner.deepen_since.assert_called_once_with(tmp, "2026-03-01")
+            assert record.result["churn"]["total"] == 3
+        finally:
+            pool.shutdown()
+            shutil.rmtree(tmp, ignore_errors=True)
+
     @patch("src.worker.pool.GitRepoCloner")
     def test_job_failure(self, mock_cloner_cls):
         """If clone raises, the job should be marked as failed."""

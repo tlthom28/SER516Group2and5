@@ -27,6 +27,8 @@ class JobRequest(BaseModel):
     repo_url: Optional[str] = Field(default=None)
     local_path: Optional[str] = Field(default=None)
     metrics: Optional[list[str]] = Field(default=None)
+    start_date: Optional[str] = Field(None, description="Start date for churn analysis in ISO format")
+    end_date: Optional[str] = Field(None, description="End date for churn analysis in ISO format")
 
     @field_validator("metrics")
     @classmethod
@@ -83,6 +85,8 @@ class JobResponse(BaseModel):
     repo_url: Optional[str] = None
     local_path: Optional[str] = None
     metrics: Optional[list[str]] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
     created_at: str
     message: str
 
@@ -95,6 +99,8 @@ class JobDetailResponse(BaseModel):
     repo_url: Optional[str] = None
     local_path: Optional[str] = None
     metrics: Optional[list[str]] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
     created_at: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None

@@ -120,7 +120,11 @@ def compute_commit_churn(repo_path: str, sha: str) -> dict:
     if not os.path.isdir(os.path.join(repo_path, ".git")):
         raise ValueError(f"Not a git repository (missing .git): {repo_path}")
 
-    output = _run_git_show(repo_path, sha)
+    parent_sha = _get_first_parent(repo_path, sha)
+    if parent_sha:
+        output = _run_git_diff(repo_path, parent_sha, sha)
+    else:
+        output = _run_git_show(repo_path, sha)
 
     added, deleted = _parse_numstat(output)
 
@@ -130,6 +134,28 @@ def compute_commit_churn(repo_path: str, sha: str) -> dict:
         "modified": min(added, deleted),
         "total": added + deleted,
     }
+
+
+def _get_first_parent(repo_path: str, sha: str) -> str | None:
+    cmd = [
+        "git",
+        "--no-pager",
+        "-C",
+        repo_path,
+        "rev-list",
+        "--parents",
+        "-n",
+        "1",
+        sha,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise ValueError(f"git rev-list failed: {result.stderr.strip()}")
+
+    parts = result.stdout.strip().split()
+    if len(parts) < 2:
+        return None
+    return parts[1]
 
 
 def _run_git_show(repo_path: str, sha: str) -> str:
@@ -151,6 +177,27 @@ def _run_git_show(repo_path: str, sha: str) -> str:
 
     if result.returncode != 0:
         raise ValueError(f"git show failed: {result.stderr.strip()}")
+
+    return result.stdout
+
+
+def _run_git_diff(repo_path: str, parent_sha: str, sha: str) -> str:
+    cmd = [
+        "git",
+        "--no-pager",
+        "-C",
+        repo_path,
+        "diff",
+        "--numstat",
+        parent_sha,
+        sha,
+        "--",
+        *_supported_pathspecs(),
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise ValueError(f"git diff failed: {result.stderr.strip()}")
 
     return result.stdout
 
