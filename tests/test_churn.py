@@ -95,7 +95,7 @@ class TestComputeCommitChurn:
         repo = str(tmp_path)
         _init_repo(repo)
 
-        with pytest.raises(ValueError, match="git show failed"):
+        with pytest.raises(ValueError, match="git rev-list failed"):
             compute_commit_churn(repo, "0000000000000000000000000000000000000000")
 
     def test_binary_files_ignored(self, tmp_path):
