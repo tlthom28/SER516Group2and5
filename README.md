@@ -81,7 +81,6 @@ All metric calculations and integrations were implemented by the development tea
    ```
 
 After the build, please consult `docs/Ngrok setup Process with Influx and Granfana.docx` for end-to-end deployment steps. That document includes a section for setting up a local InfluxDB with an external Grafana instance (and ngrok instructions).
-See `docs/Ngrok setup Process with Influx and Granfana.docx` for Grafana dashboard provisioning and ngrok configuration details.
 
 3. The build script will:
    - Check that Git and Docker are installed
@@ -117,41 +116,18 @@ The standalone endpoints (`POST /metrics/loc`, `POST /analyze`, `POST /metrics/w
 
 The API runs at **http://localhost:8080** once the containers are up. Interactive Swagger docs are available at [http://localhost:8080/docs](http://localhost:8080/docs).
 
-### Core Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Welcome message |
-| GET | `/health` | Health check |
-| GET | `/health/db` | InfluxDB connection check |
-| POST | `/jobs` | Submit a repo analysis job (runs LOC + churn + InfluxDB writes) |
-| GET | `/jobs/{job_id}` | Get job status and progress |
-| GET | `/jobs/{job_id}/results` | Get structured results (LOC + Churn + metadata) |
-| GET | `/workers/health` | Worker pool health (pool size, queue depth, etc.) |
-
-### Standalone Metric Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/metrics/loc` | Compute LOC for a local repo path |
-| POST | `/analyze` | Clone a repo, compute LOC + churn, store in InfluxDB |
-| POST | `/metrics/wip` | Compute WIP metrics from a Taiga board |
-| POST | `/metrics/fog-index` | Compute Fog Index (code readability) for Python/Markdown |
-| POST | `/metrics/class-coverage` | Compute JavaDoc coverage for Java classes |
-| POST | `/metrics/method-coverage` | Compute JavaDoc coverage by method visibility (public/private) |
-| POST | `/metrics/taiga-metrics` | Compute adopted work and sprint metrics from Taiga |
-| GET | `/cycle-time` | Compute cycle time metrics for Taiga user stories in a date range |
+For the full endpoint list and request/response examples, see `docs/API.md`.
 
 ## Using the Jobs API
 
-`POST /jobs` is the primary way to run analysis. Pass either a `repo_url` (public GitHub URL) or a `local_path` (path to a repo inside the container).
+`POST /jobs` is the primary way to run analysis. Pass either a `repo_url` (public GitHub URL) or a `local_path` (path to a repo inside the container). Optional `metrics` can include `fog_index`, `class_coverage`, `method_coverage`. Optional `start_date`/`end_date` scope churn.
 
 ### Submit a job
 
 ```sh
 curl -s -X POST http://localhost:8080/jobs \
   -H "Content-Type: application/json" \
-  -d '{"repo_url": "https://github.com/SimplifyJobs/Summer2026-Internships.git"}' \
+  -d '{"repo_url": "https://github.com/octocat/hello-world", "metrics": ["fog_index"], "start_date": "2026-03-01", "end_date": "2026-03-31"}' \
   | python3 -m json.tool
 ```
 
@@ -160,7 +136,7 @@ Or with a local path:
 ```sh
 curl -s -X POST http://localhost:8080/jobs \
   -H "Content-Type: application/json" \
-  -d '{"local_path": "/app/src"}' \
+  -d '{"local_path": "/app/src", "metrics": ["class_coverage"]}' \
   | python3 -m json.tool
 ```
 
@@ -208,90 +184,7 @@ Example response:
 }
 ```
 
-| Scenario | Response |
-|----------|----------|
-| Job completed | Full LOC + churn + metadata |
-| Job still running | `{ "status": "processing", "message": "..." }` |
-| Job not found | 404 with `{ "detail": "Job not found" }` |
-
-After a job completes, the metrics are in InfluxDB and the Grafana dashboard picks them up automatically.
-
-## Using the Cycle Time Endpoint
-
-`GET /cycle-time` computes cycle time metrics for Taiga user stories within a date range. Cycle time measures how long (in hours) a user story takes to move from "In Progress" to "Done". Results are also written to InfluxDB automatically.
-
-### Query Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `start` | string | Yes | Start date in `YYYY-MM-DD` format |
-| `end` | string | Yes | End date in `YYYY-MM-DD` format |
-| `slug` | string | No* | Taiga project slug |
-| `taiga_id` | integer | No* | Taiga project ID (alternative to slug) |
-| `base_url` | string | No | Taiga API base URL (defaults to configured URL) |
-| `sprint_id` | integer | No | Optional Taiga sprint/milestone ID to filter by |
-
-\* Either `slug` or `taiga_id` must be provided.
-
-### Example Request
-
-```sh
-curl -X GET "http://localhost:8080/cycle-time?start=2021-05-01&end=2021-06-30&slug=lesly-we-play-sport" \
-  -H "Accept: application/json"
-```
-
-With a sprint filter:
-
-```sh
-curl -X GET "http://localhost:8080/cycle-time?start=2021-05-01&end=2021-06-30&slug=lesly-we-play-sport&sprint_id=101" \
-  -H "Accept: application/json"
-```
-
-### Example Response
-
-```json
-{
-  "project_id": 10,
-  "project_slug": "my-project",
-  "sprint_id": 101,
-  "start_date": "2026-03-01",
-  "end_date": "2026-03-31",
-  "story_cycle_times": [
-    {
-      "story_id": 1,
-      "cycle_time_hours": 48.0
-    },
-    {
-      "story_id": 2,
-      "cycle_time_hours": 24.5
-    },
-    {
-      "story_id": 3,
-      "cycle_time_hours": null
-    }
-  ],
-  "summary": {
-    "average": 36.25,
-    "median": 36.25,
-    "min": 24.5,
-    "max": 48.0
-  }
-}
-```
-
-| Field | Description |
-|-------|-------------|
-| `story_cycle_times[].cycle_time_hours` | Hours from "In Progress" to "Done" (`null` if story is incomplete) |
-| `summary.average` | Mean cycle time across completed stories |
-| `summary.median` | Median cycle time |
-| `summary.min` / `summary.max` | Shortest and longest cycle times |
-
-| Scenario | Response |
-|----------|----------|
-| Valid request | 200 with cycle time data + summary |
-| Invalid date format | 400 with `{ "detail": "Invalid date format..." }` |
-| Missing slug and taiga_id | 400 with `{ "detail": "Missing 'slug' or 'taiga_id' parameter" }` |
-| start > end | 400 with `{ "detail": "'start' must be less than or equal to 'end'." }` |
+For all other endpoints and full request/response samples with verified test data, see `docs/API.md`.
 
 ## Environment Variables
 
@@ -355,8 +248,7 @@ project/
     dashboards/          # Grafana dashboard JSON (with templated variables)
     provisioning/        # Grafana auto-provisioning configs
   docs/
-    API.md               # Detailed API documentation
-    DEPLOYMENT.md        # Deployment guide
+    API.md               # Detailed API documentation with real test samples
     PERFORMANCE_BASELINE.md  # Performance benchmarks
   docker-compose.yml
   Dockerfile
